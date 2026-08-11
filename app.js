@@ -1,5 +1,5 @@
 
-const APP_VERSION="1.1.0";
+const APP_VERSION="1.2.0";
 const $=id=>document.getElementById(id);
 
 const cfC=$("cantusCanvas"), cpC=$("counterCanvas");
@@ -73,11 +73,12 @@ function midi(n){return baseMidi(n.step)+n.acc}
 function drawClef(ctx,staffTop=TOP,staffLeft=STAFF_LEFT){
   ctx.save();
   ctx.fillStyle="#111";
-  ctx.font="76px 'Times New Roman', Georgia, serif";
+  // v1.2: iPhone実画面に合わせて約18%拡大。
+  // 交差部が第2〜第4線付近へ自然に重なるよう、中心位置も微調整。
+  ctx.font="90px 'Times New Roman', Georgia, serif";
   ctx.textAlign="center";
   ctx.textBaseline="middle";
-  // G線 = staffTop + 3*LINE。記号の中心を少し上に置き、交差部を五線中央付近へ
-  ctx.fillText("𝄞",43,staffTop+LINE*2.25);
+  ctx.fillText("𝄞",45,staffTop+LINE*2.20);
   ctx.restore();
 }
 
@@ -88,20 +89,26 @@ function openHead(ctx,px,py,kind){
   ctx.translate(px,py);
   ctx.rotate(-0.30);
 
-  // outer
+  // v1.2: 外形を少し小さく、穴を大きくして線を細く均整化。
+  // ただし全音符／二分音符それぞれの対角方向の太さは保持する。
+  const outerW = kind==="whole" ? 10.0 : 9.7;
+  const outerH = kind==="whole" ? 6.35 : 6.15;
+
   ctx.fillStyle="#111";
   ctx.beginPath();
-  ctx.ellipse(0,0,10.2,6.6,0,0,Math.PI*2);
+  ctx.ellipse(0,0,outerW,outerH,0,0,Math.PI*2);
   ctx.fill();
 
-  // inner hole
-  // whole: 右上・左下を太く => 穴を左上→右下方向へ寄せる
-  // half : 左上・右下を太く => 穴を右上→左下方向へ寄せる
-  const sx = kind==="whole" ? -1.15 : 1.15;
-  const sy = kind==="whole" ? -0.75 : 0.75;
+  // 全音符：右上・左下が太い
+  // 二分音符：左上・右下が太い
+  const sx = kind==="whole" ? -1.30 : 1.25;
+  const sy = kind==="whole" ? -0.78 : 0.75;
+  const holeW = kind==="whole" ? 6.75 : 6.55;
+  const holeH = kind==="whole" ? 3.78 : 3.62;
+
   ctx.fillStyle="#fff";
   ctx.beginPath();
-  ctx.ellipse(sx,sy,6.3,3.55,0,0,Math.PI*2);
+  ctx.ellipse(sx,sy,holeW,holeH,0,0,Math.PI*2);
   ctx.fill();
 
   ctx.restore();
@@ -311,7 +318,7 @@ function guideCanvas(id,kind){
   for(let i=0;i<5;i++){ctx.beginPath();ctx.moveTo(l,t+i*sp);ctx.lineTo(l+w,t+i*sp);ctx.stroke()}
   const px=b.width/2,py=t+2*sp;
   if(kind==="clef"){
-    ctx.font="65px serif";ctx.fillStyle="#111";ctx.textAlign="center";ctx.textBaseline="middle";ctx.fillText("𝄞",px-28,t+2.2*sp);
+    ctx.font="78px serif";ctx.fillStyle="#111";ctx.textAlign="center";ctx.textBaseline="middle";ctx.fillText("𝄞",px-28,t+2.15*sp);
   }else if(kind==="whole"){
     openHead(ctx,px,py,"whole");lineThroughGuide(ctx,px,py);
   }else if(kind==="half"){

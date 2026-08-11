@@ -1,4 +1,4 @@
-const CACHE_NAME="counterpoint-v11";
+const CACHE_NAME="counterpoint-v12";
 const CORE=["./","./index.html","./style.css","./app.js","./manifest.webmanifest","./icon-192.svg","./icon-512.svg"];
 self.addEventListener("install",e=>e.waitUntil(caches.open(CACHE_NAME).then(c=>c.addAll(CORE))));
 self.addEventListener("activate",e=>e.waitUntil(caches.keys().then(k=>Promise.all(k.filter(x=>x!==CACHE_NAME).map(x=>caches.delete(x)))).then(()=>self.clients.claim())));
