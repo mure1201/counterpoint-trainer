@@ -1,5 +1,5 @@
 
-const APP_VERSION="1.7.0";
+const APP_VERSION="1.8.0";
 const $=id=>document.getElementById(id);
 
 const cfC=$("cantusCanvas"), cpC=$("counterCanvas");
@@ -99,14 +99,14 @@ function drawClef(ctx,staffTop=TOP,staffLeft=STAFF_LEFT){
   ctx.save();
   ctx.fillStyle="#111";
 
-  // v1.7:
-  // ・v1.6よりさらに大型化
-  // ・五線の上下にはっきりはみ出す
-  // ・ト音記号上部の交差箇所が、五線の第2線付近に来るよう上へ移動
-  ctx.font="132px 'Times New Roman', Georgia, serif";
+  // v1.8:
+  // v1.7より少し大きく、少し下へ移動。
+  // 記号内の3つの主要な交差位置が、上から五線の第2線・第3線・第5線に
+  // できるだけ重なるように配置する。
+  ctx.font="140px 'Times New Roman', Georgia, serif";
   ctx.textAlign="center";
   ctx.textBaseline="middle";
-  ctx.fillText("𝄞",51,staffTop+LINE*1.52);
+  ctx.fillText("𝄞",52,staffTop+LINE*1.68);
 
   ctx.restore();
 }
@@ -118,48 +118,97 @@ function openHead(ctx,px,py,kind){
   ctx.translate(px,py);
   ctx.rotate(-0.30);
 
-  // v1.7:
-  // 音符頭全体を太くするのではなく、
-  // 指定した対角2か所だけを太く描く。
-  //
-  // 全音符：右上・左下を太く
-  // 二分音符：左上・右下を太く
-
   const rx = kind==="whole" ? 10.0 : 9.7;
   const ry = kind==="whole" ? 6.15 : 5.95;
 
-  // 内側を白で抜く
+  // 基本の外輪郭は細く均一。
   ctx.fillStyle="#fff";
   ctx.beginPath();
-  ctx.ellipse(0,0,rx-0.2,ry-0.2,0,0,Math.PI*2);
+  ctx.ellipse(0,0,rx-0.15,ry-0.15,0,0,Math.PI*2);
   ctx.fill();
 
-  // 基本線：細く均一
   ctx.strokeStyle="#111";
+  ctx.lineWidth=1.45;
   ctx.lineCap="round";
-  ctx.lineWidth=1.55;
+  ctx.lineJoin="round";
   ctx.beginPath();
   ctx.ellipse(0,0,rx,ry,0,0,Math.PI*2);
   ctx.stroke();
 
-  // 太くする部分だけを追加描画
-  ctx.lineWidth=3.9;
+  // 太い箇所は「外側へ膨らませず」、内側へ厚みを足す。
+  // ベジェ曲線でなだらかに広がって戻る形にし、
+  // 細い部分との境界を滑らかにつなぐ。
+  function innerThickArc(centerAngle, span, depth){
+    const a1=centerAngle-span;
+    const a2=centerAngle+span;
 
-  function thickArc(center, halfWidth=0.46){
+    const p1={x:rx*Math.cos(a1), y:ry*Math.sin(a1)};
+    const p2={x:rx*Math.cos(a2), y:ry*Math.sin(a2)};
+
+    const irx=rx-depth;
+    const iry=ry-depth*0.72;
+    const q2={x:irx*Math.cos(a2), y:iry*Math.sin(a2)};
+    const q1={x:irx*Math.cos(a1), y:iry*Math.sin(a1)};
+
+    const c1a=centerAngle-span*0.35;
+    const c2a=centerAngle+span*0.35;
+
+    ctx.fillStyle="#111";
     ctx.beginPath();
-    ctx.ellipse(0,0,rx,ry,0,center-halfWidth,center+halfWidth);
-    ctx.stroke();
+    ctx.moveTo(p1.x,p1.y);
+
+    // 外側輪郭に沿う
+    ctx.bezierCurveTo(
+      rx*Math.cos(c1a), ry*Math.sin(c1a),
+      rx*Math.cos(c2a), ry*Math.sin(c2a),
+      p2.x,p2.y
+    );
+
+    // 内側へ滑らかに入る
+    ctx.bezierCurveTo(
+      (rx-depth*0.35)*Math.cos(a2),
+      (ry-depth*0.28)*Math.sin(a2),
+      (rx-depth*0.75)*Math.cos(a2),
+      (ry-depth*0.55)*Math.sin(a2),
+      q2.x,q2.y
+    );
+
+    // 内側の輪郭に沿って戻る
+    ctx.bezierCurveTo(
+      irx*Math.cos(c2a), iry*Math.sin(c2a),
+      irx*Math.cos(c1a), iry*Math.sin(c1a),
+      q1.x,q1.y
+    );
+
+    // 外側へなだらかに戻る
+    ctx.bezierCurveTo(
+      (rx-depth*0.75)*Math.cos(a1),
+      (ry-depth*0.55)*Math.sin(a1),
+      (rx-depth*0.35)*Math.cos(a1),
+      (ry-depth*0.28)*Math.sin(a1),
+      p1.x,p1.y
+    );
+
+    ctx.closePath();
+    ctx.fill();
   }
 
   if(kind==="whole"){
-    // 右上（約315°）・左下（約135°）
-    thickArc(Math.PI*7/4,0.48);
-    thickArc(Math.PI*3/4,0.48);
+    // 全音符：右上・左下の内側のみ厚くする
+    innerThickArc(Math.PI*7/4,0.62,2.55);
+    innerThickArc(Math.PI*3/4,0.62,2.55);
   }else{
-    // 左上（約225°）・右下（約45°）
-    thickArc(Math.PI*5/4,0.46);
-    thickArc(Math.PI/4,0.46);
+    // 二分音符：左上・右下の内側のみ厚くする
+    innerThickArc(Math.PI*5/4,0.58,2.45);
+    innerThickArc(Math.PI/4,0.58,2.45);
   }
+
+  // 最後に細い外輪郭をもう一度描き、外周は均一な細さに保つ。
+  ctx.strokeStyle="#111";
+  ctx.lineWidth=1.35;
+  ctx.beginPath();
+  ctx.ellipse(0,0,rx,ry,0,0,Math.PI*2);
+  ctx.stroke();
 
   ctx.restore();
 }
@@ -401,30 +450,8 @@ $("analyzeBtn").onclick=()=>{
   $("summaryBadge").textContent=e?`要修正 ${e}件`:c?`注意 ${c}件`:"適切";
 };
 
-// --- notation guide ---
-function guideCanvas(id,kind){
-  const c=$(id),ctx=c.getContext("2d"),r=devicePixelRatio||1,b=c.getBoundingClientRect();
-  c.width=b.width*r;c.height=b.height*r;ctx.setTransform(r,0,0,r,0,0);
-  ctx.clearRect(0,0,b.width,b.height);
-  const t=32,l=12,w=b.width-24,sp=12;
-  ctx.strokeStyle="#777";ctx.lineWidth=1;
-  for(let i=0;i<5;i++){ctx.beginPath();ctx.moveTo(l,t+i*sp);ctx.lineTo(l+w,t+i*sp);ctx.stroke()}
-  const px=b.width/2,py=t+2*sp;
-  if(kind==="clef"){
-    ctx.font="112px serif";ctx.fillStyle="#111";ctx.textAlign="center";ctx.textBaseline="middle";ctx.fillText("𝄞",px-24,t+1.55*sp);
-  }else if(kind==="whole"){
-    openHead(ctx,px,py,"whole");lineThroughGuide(ctx,px,py);
-  }else if(kind==="half"){
-    openHead(ctx,px,py,"half");ctx.strokeStyle="#111";ctx.lineWidth=1.6;ctx.beginPath();ctx.moveTo(px+7.7,py);ctx.lineTo(px+7.7,py-sp*3);ctx.stroke();lineThroughGuide(ctx,px,py);
-  }else if(kind==="rest"){
-    ctx.fillStyle="#111";ctx.fillRect(px-7,t+2*sp-5.5,14,5.5);
-  }
-}
-function lineThroughGuide(ctx,px,py){ctx.strokeStyle="#777";ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(px-11,py);ctx.lineTo(px+11,py);ctx.stroke()}
-function redrawGuides(){guideCanvas("guideClef","clef");guideCanvas("guideWhole","whole");guideCanvas("guideHalf","half");guideCanvas("guideRest","rest")}
-
-window.addEventListener("load",()=>{redraw();redrawGuides()});
-window.addEventListener("resize",()=>{redraw();redrawGuides()});
+window.addEventListener("load",()=>{redraw()});
+window.addEventListener("resize",()=>{redraw()});
 
 // auto update
 let waitingWorker=null;
