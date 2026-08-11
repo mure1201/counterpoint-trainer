@@ -1,5 +1,5 @@
 
-const APP_VERSION="1.13.0";
+const APP_VERSION="1.15.0";
 const $=id=>document.getElementById(id);
 
 const cfC=$("cantusCanvas"), cpC=$("counterCanvas");
@@ -18,20 +18,199 @@ let history=[], future=[];
 let audioCtx=null, activeNodes=[];
 let tempoBpm=80;
 
-const PROBLEMS=[
-{name:"問題 1",steps:[0,1,3,2,1,0]},
-{name:"問題 2",steps:[0,2,3,4,2,1,0]},
-{name:"問題 3",steps:[0,1,2,4,3,2,1,0]},
-{name:"問題 4",steps:[0,2,4,3,5,3,1,0]},
-{name:"問題 5",steps:[0,1,3,4,5,4,2,1,0]},
-{name:"問題 6",steps:[0,2,1,3,5,4,3,1,0]},
-{name:"問題 7",steps:[0,1,3,5,4,2,3,2,1,0]},
-{name:"問題 8",steps:[0,2,4,5,3,1,2,3,1,0]},
-{name:"問題 9",steps:[0,3,2,4,5,3,1,0]},
-{name:"問題10",steps:[0,1,4,3,2,5,3,1,0]},
-{name:"問題11",steps:[0,2,3,1,4,5,3,2,1,0]},
-{name:"問題12",steps:[0,1,2,5,4,3,5,2,1,0]}
-];
+const PROBLEM_BANK={
+  major:{
+    upper:[
+      {name:"長旋法・上声 1",steps:[0, 1, 3, 2, 1, 0]},
+      {name:"長旋法・上声 2",steps:[0, 2, 3, 4, 2, 1, 0]},
+      {name:"長旋法・上声 3",steps:[0, 1, 2, 4, 3, 2, 1, 0]},
+      {name:"長旋法・上声 4",steps:[0, 2, 4, 3, 5, 3, 1, 0]},
+      {name:"長旋法・上声 5",steps:[0, 1, 3, 4, 5, 4, 2, 1, 0]},
+      {name:"長旋法・上声 6",steps:[0, 2, 1, 3, 5, 4, 3, 1, 0]},
+      {name:"長旋法・上声 7",steps:[0, 1, 2, 3, 5, 4, 3, 2, 0]},
+      {name:"長旋法・上声 8",steps:[0, 2, 3, 5, 4, 3, 1, 2, 0]},
+      {name:"長旋法・上声 9",steps:[0, 1, 3, 2, 4, 5, 3, 2, 1, 0]},
+      {name:"長旋法・上声 10",steps:[0, 2, 4, 5, 3, 4, 2, 1, 0]}
+    ],
+    lower:[
+      {name:"長旋法・下声 1",steps:[7, 6, 4, 5, 6, 7]},
+      {name:"長旋法・下声 2",steps:[7, 5, 4, 3, 5, 6, 7]},
+      {name:"長旋法・下声 3",steps:[7, 6, 5, 3, 4, 5, 6, 7]},
+      {name:"長旋法・下声 4",steps:[7, 5, 3, 4, 2, 4, 6, 7]},
+      {name:"長旋法・下声 5",steps:[7, 6, 4, 3, 2, 3, 5, 6, 7]},
+      {name:"長旋法・下声 6",steps:[7, 5, 6, 4, 2, 3, 4, 6, 7]},
+      {name:"長旋法・下声 7",steps:[7, 6, 5, 4, 2, 3, 4, 5, 7]},
+      {name:"長旋法・下声 8",steps:[7, 5, 4, 2, 3, 4, 6, 5, 7]},
+      {name:"長旋法・下声 9",steps:[7, 6, 4, 5, 3, 2, 4, 5, 6, 7]},
+      {name:"長旋法・下声 10",steps:[7, 5, 3, 2, 4, 3, 5, 6, 7]}
+    ]
+  },
+  minor:{
+    upper:[
+      {name:"短旋法・上声 1",steps:[0, 2, 1, 3, 2, 0]},
+      {name:"短旋法・上声 2",steps:[0, 1, 3, 4, 2, 1, 0]},
+      {name:"短旋法・上声 3",steps:[0, 2, 4, 3, 1, 2, 0]},
+      {name:"短旋法・上声 4",steps:[0, 1, 4, 3, 2, 1, 0]},
+      {name:"短旋法・上声 5",steps:[0, 2, 3, 5, 4, 2, 1, 0]},
+      {name:"短旋法・上声 6",steps:[0, 1, 3, 2, 4, 3, 1, 0]},
+      {name:"短旋法・上声 7",steps:[0, 2, 3, 4, 2, 3, 1, 0]},
+      {name:"短旋法・上声 8",steps:[0, 1, 2, 4, 3, 5, 2, 1, 0]},
+      {name:"短旋法・上声 9",steps:[0, 2, 4, 3, 5, 4, 2, 1, 0]},
+      {name:"短旋法・上声 10",steps:[0, 1, 3, 4, 2, 3, 2, 1, 0]}
+    ],
+    lower:[
+      {name:"短旋法・下声 1",steps:[7, 5, 6, 4, 5, 7]},
+      {name:"短旋法・下声 2",steps:[7, 6, 4, 3, 5, 6, 7]},
+      {name:"短旋法・下声 3",steps:[7, 5, 3, 4, 6, 5, 7]},
+      {name:"短旋法・下声 4",steps:[7, 6, 3, 4, 5, 6, 7]},
+      {name:"短旋法・下声 5",steps:[7, 5, 4, 2, 3, 5, 6, 7]},
+      {name:"短旋法・下声 6",steps:[7, 6, 4, 5, 3, 4, 6, 7]},
+      {name:"短旋法・下声 7",steps:[7, 5, 4, 3, 5, 4, 6, 7]},
+      {name:"短旋法・下声 8",steps:[7, 6, 5, 3, 4, 2, 5, 6, 7]},
+      {name:"短旋法・下声 9",steps:[7, 5, 3, 4, 2, 3, 5, 6, 7]},
+      {name:"短旋法・下声 10",steps:[7, 6, 4, 3, 5, 4, 5, 6, 7]}
+    ]
+  },
+  dorian:{
+    upper:[
+      {name:"ドリア旋法・上声 1",steps:[0, 1, 3, 2, 4, 2, 1, 0]},
+      {name:"ドリア旋法・上声 2",steps:[0, 2, 3, 5, 4, 3, 1, 0]},
+      {name:"ドリア旋法・上声 3",steps:[0, 1, 2, 4, 5, 3, 2, 0]},
+      {name:"ドリア旋法・上声 4",steps:[0, 2, 4, 3, 1, 2, 1, 0]},
+      {name:"ドリア旋法・上声 5",steps:[0, 1, 3, 5, 4, 2, 3, 1, 0]},
+      {name:"ドリア旋法・上声 6",steps:[0, 2, 1, 3, 4, 5, 3, 1, 0]},
+      {name:"ドリア旋法・上声 7",steps:[0, 1, 2, 3, 5, 4, 2, 1, 0]},
+      {name:"ドリア旋法・上声 8",steps:[0, 2, 4, 5, 3, 2, 4, 1, 0]},
+      {name:"ドリア旋法・上声 9",steps:[0, 1, 3, 2, 5, 4, 3, 1, 0]},
+      {name:"ドリア旋法・上声 10",steps:[0, 2, 3, 4, 2, 1, 3, 1, 0]}
+    ],
+    lower:[
+      {name:"ドリア旋法・下声 1",steps:[7, 6, 4, 5, 3, 5, 6, 7]},
+      {name:"ドリア旋法・下声 2",steps:[7, 5, 4, 2, 3, 4, 6, 7]},
+      {name:"ドリア旋法・下声 3",steps:[7, 6, 5, 3, 2, 4, 5, 7]},
+      {name:"ドリア旋法・下声 4",steps:[7, 5, 3, 4, 6, 5, 6, 7]},
+      {name:"ドリア旋法・下声 5",steps:[7, 6, 4, 2, 3, 5, 4, 6, 7]},
+      {name:"ドリア旋法・下声 6",steps:[7, 5, 6, 4, 3, 2, 4, 6, 7]},
+      {name:"ドリア旋法・下声 7",steps:[7, 6, 5, 4, 2, 3, 5, 6, 7]},
+      {name:"ドリア旋法・下声 8",steps:[7, 5, 3, 2, 4, 5, 3, 6, 7]},
+      {name:"ドリア旋法・下声 9",steps:[7, 6, 4, 5, 2, 3, 4, 6, 7]},
+      {name:"ドリア旋法・下声 10",steps:[7, 5, 4, 3, 5, 6, 4, 6, 7]}
+    ]
+  },
+  phrygian:{
+    upper:[
+      {name:"フリギア旋法・上声 1",steps:[0, 1, 3, 2, 1, 0]},
+      {name:"フリギア旋法・上声 2",steps:[0, 2, 4, 3, 2, 1, 0]},
+      {name:"フリギア旋法・上声 3",steps:[0, 1, 2, 4, 3, 1, 0]},
+      {name:"フリギア旋法・上声 4",steps:[0, 1, 3, 4, 2, 1, 0]},
+      {name:"フリギア旋法・上声 5",steps:[0, 2, 3, 5, 4, 2, 1, 0]},
+      {name:"フリギア旋法・上声 6",steps:[0, 1, 2, 3, 5, 3, 1, 0]},
+      {name:"フリギア旋法・上声 7",steps:[0, 2, 4, 5, 3, 2, 1, 0]},
+      {name:"フリギア旋法・上声 8",steps:[0, 1, 3, 2, 4, 3, 1, 0]},
+      {name:"フリギア旋法・上声 9",steps:[0, 2, 3, 4, 5, 3, 2, 1, 0]},
+      {name:"フリギア旋法・上声 10",steps:[0, 1, 2, 4, 5, 4, 2, 1, 0]}
+    ],
+    lower:[
+      {name:"フリギア旋法・下声 1",steps:[7, 6, 4, 5, 6, 7]},
+      {name:"フリギア旋法・下声 2",steps:[7, 5, 3, 4, 5, 6, 7]},
+      {name:"フリギア旋法・下声 3",steps:[7, 6, 5, 3, 4, 6, 7]},
+      {name:"フリギア旋法・下声 4",steps:[7, 6, 4, 3, 5, 6, 7]},
+      {name:"フリギア旋法・下声 5",steps:[7, 5, 4, 2, 3, 5, 6, 7]},
+      {name:"フリギア旋法・下声 6",steps:[7, 6, 5, 4, 2, 4, 6, 7]},
+      {name:"フリギア旋法・下声 7",steps:[7, 5, 3, 2, 4, 5, 6, 7]},
+      {name:"フリギア旋法・下声 8",steps:[7, 6, 4, 5, 3, 4, 6, 7]},
+      {name:"フリギア旋法・下声 9",steps:[7, 5, 4, 3, 2, 4, 5, 6, 7]},
+      {name:"フリギア旋法・下声 10",steps:[7, 6, 5, 3, 2, 3, 5, 6, 7]}
+    ]
+  },
+  lydian:{
+    upper:[
+      {name:"リディア旋法・上声 1",steps:[0, 2, 3, 4, 2, 1, 0]},
+      {name:"リディア旋法・上声 2",steps:[0, 1, 3, 5, 4, 2, 0]},
+      {name:"リディア旋法・上声 3",steps:[0, 2, 4, 3, 5, 3, 1, 0]},
+      {name:"リディア旋法・上声 4",steps:[0, 1, 2, 4, 5, 3, 2, 0]},
+      {name:"リディア旋法・上声 5",steps:[0, 2, 3, 5, 4, 3, 1, 0]},
+      {name:"リディア旋法・上声 6",steps:[0, 1, 3, 4, 2, 3, 1, 0]},
+      {name:"リディア旋法・上声 7",steps:[0, 2, 4, 5, 3, 2, 1, 0]},
+      {name:"リディア旋法・上声 8",steps:[0, 1, 2, 3, 5, 4, 2, 1, 0]},
+      {name:"リディア旋法・上声 9",steps:[0, 2, 3, 4, 5, 3, 2, 0]},
+      {name:"リディア旋法・上声 10",steps:[0, 1, 3, 5, 4, 3, 2, 1, 0]}
+    ],
+    lower:[
+      {name:"リディア旋法・下声 1",steps:[7, 5, 4, 3, 5, 6, 7]},
+      {name:"リディア旋法・下声 2",steps:[7, 6, 4, 2, 3, 5, 7]},
+      {name:"リディア旋法・下声 3",steps:[7, 5, 3, 4, 2, 4, 6, 7]},
+      {name:"リディア旋法・下声 4",steps:[7, 6, 5, 3, 2, 4, 5, 7]},
+      {name:"リディア旋法・下声 5",steps:[7, 5, 4, 2, 3, 4, 6, 7]},
+      {name:"リディア旋法・下声 6",steps:[7, 6, 4, 3, 5, 4, 6, 7]},
+      {name:"リディア旋法・下声 7",steps:[7, 5, 3, 2, 4, 5, 6, 7]},
+      {name:"リディア旋法・下声 8",steps:[7, 6, 5, 4, 2, 3, 5, 6, 7]},
+      {name:"リディア旋法・下声 9",steps:[7, 5, 4, 3, 2, 4, 5, 7]},
+      {name:"リディア旋法・下声 10",steps:[7, 6, 4, 2, 3, 4, 5, 6, 7]}
+    ]
+  },
+  mixolydian:{
+    upper:[
+      {name:"ミクソリディア旋法・上声 1",steps:[0, 1, 3, 2, 4, 2, 0]},
+      {name:"ミクソリディア旋法・上声 2",steps:[0, 2, 3, 5, 4, 2, 1, 0]},
+      {name:"ミクソリディア旋法・上声 3",steps:[0, 1, 2, 4, 3, 2, 0]},
+      {name:"ミクソリディア旋法・上声 4",steps:[0, 2, 4, 3, 5, 3, 1, 0]},
+      {name:"ミクソリディア旋法・上声 5",steps:[0, 1, 3, 4, 5, 3, 2, 0]},
+      {name:"ミクソリディア旋法・上声 6",steps:[0, 2, 1, 3, 5, 4, 2, 0]},
+      {name:"ミクソリディア旋法・上声 7",steps:[0, 1, 2, 3, 5, 4, 2, 1, 0]},
+      {name:"ミクソリディア旋法・上声 8",steps:[0, 2, 4, 5, 3, 2, 1, 0]},
+      {name:"ミクソリディア旋法・上声 9",steps:[0, 1, 3, 2, 4, 5, 3, 1, 0]},
+      {name:"ミクソリディア旋法・上声 10",steps:[0, 2, 3, 4, 2, 3, 1, 0]}
+    ],
+    lower:[
+      {name:"ミクソリディア旋法・下声 1",steps:[7, 6, 4, 5, 3, 5, 7]},
+      {name:"ミクソリディア旋法・下声 2",steps:[7, 5, 4, 2, 3, 5, 6, 7]},
+      {name:"ミクソリディア旋法・下声 3",steps:[7, 6, 5, 3, 4, 5, 7]},
+      {name:"ミクソリディア旋法・下声 4",steps:[7, 5, 3, 4, 2, 4, 6, 7]},
+      {name:"ミクソリディア旋法・下声 5",steps:[7, 6, 4, 3, 2, 4, 5, 7]},
+      {name:"ミクソリディア旋法・下声 6",steps:[7, 5, 6, 4, 2, 3, 5, 7]},
+      {name:"ミクソリディア旋法・下声 7",steps:[7, 6, 5, 4, 2, 3, 5, 6, 7]},
+      {name:"ミクソリディア旋法・下声 8",steps:[7, 5, 3, 2, 4, 5, 6, 7]},
+      {name:"ミクソリディア旋法・下声 9",steps:[7, 6, 4, 5, 3, 2, 4, 6, 7]},
+      {name:"ミクソリディア旋法・下声 10",steps:[7, 5, 4, 3, 5, 4, 6, 7]}
+    ]
+  },
+  aeolian:{
+    upper:[
+      {name:"エオリア旋法・上声 1",steps:[0, 2, 1, 3, 2, 0]},
+      {name:"エオリア旋法・上声 2",steps:[0, 1, 3, 4, 2, 1, 0]},
+      {name:"エオリア旋法・上声 3",steps:[0, 2, 4, 3, 2, 1, 0]},
+      {name:"エオリア旋法・上声 4",steps:[0, 1, 2, 4, 3, 1, 0]},
+      {name:"エオリア旋法・上声 5",steps:[0, 2, 3, 5, 4, 2, 1, 0]},
+      {name:"エオリア旋法・上声 6",steps:[0, 1, 3, 2, 4, 3, 1, 0]},
+      {name:"エオリア旋法・上声 7",steps:[0, 2, 4, 5, 3, 2, 1, 0]},
+      {name:"エオリア旋法・上声 8",steps:[0, 1, 2, 3, 5, 3, 2, 0]},
+      {name:"エオリア旋法・上声 9",steps:[0, 2, 3, 4, 2, 3, 1, 0]},
+      {name:"エオリア旋法・上声 10",steps:[0, 1, 3, 4, 5, 4, 2, 1, 0]}
+    ],
+    lower:[
+      {name:"エオリア旋法・下声 1",steps:[7, 5, 6, 4, 5, 7]},
+      {name:"エオリア旋法・下声 2",steps:[7, 6, 4, 3, 5, 6, 7]},
+      {name:"エオリア旋法・下声 3",steps:[7, 5, 3, 4, 5, 6, 7]},
+      {name:"エオリア旋法・下声 4",steps:[7, 6, 5, 3, 4, 6, 7]},
+      {name:"エオリア旋法・下声 5",steps:[7, 5, 4, 2, 3, 5, 6, 7]},
+      {name:"エオリア旋法・下声 6",steps:[7, 6, 4, 5, 3, 4, 6, 7]},
+      {name:"エオリア旋法・下声 7",steps:[7, 5, 3, 2, 4, 5, 6, 7]},
+      {name:"エオリア旋法・下声 8",steps:[7, 6, 5, 4, 2, 4, 5, 7]},
+      {name:"エオリア旋法・下声 9",steps:[7, 5, 4, 3, 5, 4, 6, 7]},
+      {name:"エオリア旋法・下声 10",steps:[7, 6, 4, 3, 2, 3, 5, 6, 7]}
+    ]
+  }
+};
+
+const MODE_LABELS={major:"長旋法",minor:"短旋法",dorian:"ドリア旋法",phrygian:"フリギア旋法",lydian:"リディア旋法",mixolydian:"ミクソリディア旋法",aeolian:"エオリア旋法"};
+function currentProblemKey(){
+  const modeValue=$("modeSelect")?.value || "major";
+  return PROBLEM_BANK[modeValue] ? modeValue : "major";
+}
+function currentProblems(){
+  return PROBLEM_BANK[currentProblemKey()][cfVoice] || [];
+}
 
 function noteObj(step,acc=0,rest=false,empty=false){return {step,acc,rest,empty}}
 function cloneCounter(){return counter.map(n=>({...n}))}
@@ -40,18 +219,36 @@ function undo(){if(!history.length)return;future.push(cloneCounter());counter=hi
 function redo(){if(!future.length)return;history.push(cloneCounter());counter=future.pop();selected=null;redraw()}
 
 function populateProblems(){
-  PROBLEMS.forEach((p,i)=>{const o=document.createElement("option");o.value=i;o.textContent=`${i+1} / ${PROBLEMS.length}　${p.name}`;$("problemSelect").appendChild(o)});
+  const sel=$("problemSelect");
+  sel.innerHTML="";
+  const list=currentProblems();
+  list.forEach((p,i)=>{
+    const o=document.createElement("option");
+    o.value=i;
+    o.textContent=`${i+1} / ${list.length}　${p.name}`;
+    sel.appendChild(o);
+  });
+  $("problemSetSummary").textContent=`${MODE_LABELS[currentProblemKey()]}・定旋律${cfVoice==="upper"?"上声":"下声"}用　${list.length}問`;
 }
 function loadProblem(i){
   stopPlayback();
-  problemIndex=(i+PROBLEMS.length)%PROBLEMS.length;
-  cantus=PROBLEMS[problemIndex].steps.map(s=>noteObj(s));
+  const list=currentProblems();
+  if(!list.length)return;
+
+  problemIndex=(i+list.length)%list.length;
+  cantus=list[problemIndex].steps.map(s=>noteObj(s));
+
   const slots=mode==="1:2"?cantus.length*2:cantus.length;
   counter=Array.from({length:slots},()=>noteObj(4,0,false,true));
+
   selected=null;history=[];future=[];
+  populateProblems();
   $("problemSelect").value=problemIndex;
-  $("problemCount").textContent=`${problemIndex+1} / ${PROBLEMS.length}`;
-  clearFeedback();updateVoiceLayout();redraw();
+  $("problemCount").textContent=`${problemIndex+1} / ${list.length}`;
+
+  clearFeedback();
+  updateVoiceLayout();
+  redraw();
 }
 
 function updateVoiceLayout(){
@@ -81,18 +278,32 @@ function clearFeedback(){
 
 function setCanvasWidth(c,measureCount){
   const wrap=c.parentElement;
-  const viewport=Math.max(320,wrap?.clientWidth||320);
-  const logicalWidth=Math.max(viewport+1,NOTE_LEFT+RIGHT+measureCount*measureWidth);
+  const viewport=Math.max(320,wrap?.clientWidth||window.innerWidth||320);
+  const logicalWidth=Math.max(viewport+2,NOTE_LEFT+RIGHT+measureCount*measureWidth);
 
+  c.dataset.logicalWidth=String(logicalWidth);
   c.style.width=`${logicalWidth}px`;
-  c.style.minWidth=`${logicalWidth}px`;
   c.style.height="220px";
+  c.style.display="block";
+
+  if(wrap){
+    wrap.style.minHeight="220px";
+    wrap.style.height="220px";
+  }
 }
 function resize(c){
-  const r=devicePixelRatio||1,b=c.getBoundingClientRect();
-  c.width=Math.floor(b.width*r);
-  c.height=Math.floor(b.height*r);
-  c.getContext("2d").setTransform(r,0,0,r,0,0);
+  const dpr=window.devicePixelRatio||1;
+  const logicalWidth=Number(c.dataset.logicalWidth)||Math.max(320,c.parentElement?.clientWidth||320);
+  const logicalHeight=220;
+
+  c.width=Math.round(logicalWidth*dpr);
+  c.height=Math.round(logicalHeight*dpr);
+
+  c.style.width=`${logicalWidth}px`;
+  c.style.height=`${logicalHeight}px`;
+
+  const ctx=c.getContext("2d");
+  ctx.setTransform(dpr,0,0,dpr,0,0);
 }
 function y(step){return C4Y-step*(LINE/2)}
 function stepFromY(v){return Math.max(-8,Math.min(22,Math.round((C4Y-v)/(LINE/2))))}
@@ -281,18 +492,27 @@ function drawStaff(ctx,c,notes,slots,type,editable){
 }
 function redraw(){
   const measures=cantus.length;
+
   setCanvasWidth(cfC,measures);
   setCanvasWidth(cpC,measures);
 
-  resize(cfC);resize(cpC);
-  drawStaff(cfX,cfC,cantus,1,"whole",false);
-  drawStaff(cpX,cpC,counter,mode==="1:2"?2:1,mode==="1:2"?"half":"whole",true);
+  // iOS Safariでdisplay/width更新直後に0幅になるケースを避ける
+  requestAnimationFrame(()=>{
+    resize(cfC);resize(cpC);
 
-  $("selectedPitch").textContent=
-    selected==null?"未選択":
-    counter[selected].empty?"未入力":
-    counter[selected].rest?"休符":
-    noteNameObj(counter[selected]);
+    drawStaff(cfX,cfC,cantus,1,"whole",false);
+    drawStaff(cpX,cpC,counter,mode==="1:2"?2:1,mode==="1:2"?"half":"whole",true);
+
+    $("cantusScroll").style.display="block";
+    $("counterScroll").style.display="block";
+    $("counterCanvas").style.visibility="visible";
+
+    $("selectedPitch").textContent=
+      selected==null?"未選択":
+      counter[selected].empty?"未入力":
+      counter[selected].rest?"休符":
+      noteNameObj(counter[selected]);
+  });
 }
 
 // --- interaction ---
@@ -420,17 +640,23 @@ $("cfUpperBtn").onclick=()=>{
   cfVoice="upper";
   $("cfUpperBtn").classList.add("active");
   $("cfLowerBtn").classList.remove("active");
-  updateVoiceLayout();redraw();
+  problemIndex=0;
+  populateProblems();
+  loadProblem(0);
 };
 $("cfLowerBtn").onclick=()=>{
   cfVoice="lower";
   $("cfLowerBtn").classList.add("active");
   $("cfUpperBtn").classList.remove("active");
-  updateVoiceLayout();redraw();
+  problemIndex=0;
+  populateProblems();
+  loadProblem(0);
 };
 $("modeSelect").onchange=e=>{
   selectedModeName=e.target.options[e.target.selectedIndex].text;
-  clearFeedback();
+  problemIndex=0;
+  populateProblems();
+  loadProblem(0);
 };
 
 $("problemSelect").onchange=e=>loadProblem(Number(e.target.value));
@@ -569,14 +795,19 @@ try{
 }catch(e){}
 
 let syncingScroll=false;
-function syncScoreScroll(source,target){
-  if(!source||!target||syncingScroll)return;
+function mirrorScroll(source,target){
+  if(syncingScroll)return;
   syncingScroll=true;
-  target.scrollLeft=source.scrollLeft;
+
+  const sourceMax=Math.max(1,source.scrollWidth-source.clientWidth);
+  const targetMax=Math.max(0,target.scrollWidth-target.clientWidth);
+  const ratio=source.scrollLeft/sourceMax;
+  target.scrollLeft=ratio*targetMax;
+
   requestAnimationFrame(()=>{syncingScroll=false});
 }
-$("cantusScroll").addEventListener("scroll",()=>syncScoreScroll($("cantusScroll"),$("counterScroll")),{passive:true});
-$("counterScroll").addEventListener("scroll",()=>syncScoreScroll($("counterScroll"),$("cantusScroll")),{passive:true});
+$("cantusScroll").addEventListener("scroll",()=>mirrorScroll($("cantusScroll"),$("counterScroll")),{passive:true});
+$("counterScroll").addEventListener("scroll",()=>mirrorScroll($("counterScroll"),$("cantusScroll")),{passive:true});
 
 // auto update
 let waitingWorker=null;
@@ -591,6 +822,7 @@ if("serviceWorker"in navigator){
   let refreshing=false;navigator.serviceWorker.addEventListener("controllerchange",()=>{if(refreshing)return;refreshing=true;location.reload()})
 }
 
+$("modeSelect").value="major";
 populateProblems();
 loadProblem(0);
 setMeasureWidth(measureWidth,false);
