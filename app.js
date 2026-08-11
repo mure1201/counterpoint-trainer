@@ -1,5 +1,5 @@
 
-const APP_VERSION="1.20.0";
+const APP_VERSION="1.21.0";
 const $=id=>document.getElementById(id);
 
 const cfC=$("cantusCanvas"), cpC=$("counterCanvas");
@@ -12,6 +12,16 @@ let measureWidth=150; // v1.12: 110 / 150 / 200 px から選択
 
 let mode="1:2", selected=null, drag=false;
 let cfVoice="upper";
+
+// v1.21: 実際の声部レンジ
+function cfBaseStep(){ return cfVoice==="upper" ? 7 : 0; }
+function cpBaseStep(){ return cfVoice==="upper" ? 0 : 7; }
+function normalizeProblemSteps(rawSteps){
+  const first=rawSteps[0] ?? 0;
+  const base=cfBaseStep();
+  return rawSteps.map(s=>base+(s-first));
+}
+
 let selectedModeName="長旋法";
 let problemIndex=0, cantus=[], counter=[];
 let history=[], future=[];
@@ -236,10 +246,11 @@ function loadProblem(i){
   if(!list.length)return;
 
   problemIndex=(i+list.length)%list.length;
-  cantus=list[problemIndex].steps.map(s=>noteObj(s));
+  const rawSteps=list[problemIndex].steps;
+  cantus=normalizeProblemSteps(rawSteps).map(s=>noteObj(s));
 
   const slots=mode==="1:2"?cantus.length*2:cantus.length;
-  counter=Array.from({length:slots},()=>noteObj(4,0,false,true));
+  counter=Array.from({length:slots},()=>noteObj(cpBaseStep()+4,0,false,true));
 
   selected=null;history=[];future=[];
   populateProblems();
@@ -248,6 +259,7 @@ function loadProblem(i){
 
   clearFeedback();
   updateVoiceLayout();
+  buildPitchButtons();
   redraw();
 }
 
@@ -316,12 +328,12 @@ function midiBase(n){return baseMidi(n.step)+n.acc}
 function voiceOctaveSemitones(voice){return voice==="upper"?12:0}
 function cfVoiceName(){return cfVoice==="upper"?"upper":"lower"}
 function cpVoiceName(){return cfVoice==="upper"?"lower":"upper"}
-function midiCantus(n){return midiBase(n)+voiceOctaveSemitones(cfVoiceName())}
-function midiCounter(n){return midiBase(n)+voiceOctaveSemitones(cpVoiceName())}
+function midiCantus(n){return midiBase(n)}
+function midiCounter(n){return midiBase(n)}
 function noteX(i,n,w,type){
   if(type!=="whole")return x(i,n,w);
   const slotW=(w-NOTE_LEFT-RIGHT)/n;
-  return NOTE_LEFT+slotW*i+slotW*0.32;
+  return NOTE_LEFT+slotW*i+slotW*0.20;
 }
 
 // ト音記号
@@ -726,19 +738,19 @@ function buildPitchButtons(){
   if(!wrap)return;
   wrap.innerHTML="";
 
-  const steps=[];
-  for(let s=0;s<=11;s++)steps.push(s);
-
-  steps.forEach(s=>{
-    const bObj=baseName(s);
-    const octaveOffset=cpVoiceName()==="upper"?1:0;
+  const start=cpBaseStep();
+  for(let s=start;s<=start+11;s++){
+    const n=noteObj(s);
     const b=document.createElement("button");
-    b.textContent=`${bObj.letter}${bObj.octave+octaveOffset}`;
+    b.textContent=noteNameObj(n);
     b.onclick=()=>applyEdit(x=>{
-      x.step=s;x.acc=0;x.rest=false;x.empty=false;
+      x.step=s;
+      x.acc=0;
+      x.rest=false;
+      x.empty=false;
     });
     wrap.appendChild(b);
-  });
+  }
 }
 buildPitchButtons();
 
@@ -757,7 +769,6 @@ $("cfUpperBtn").onclick=()=>{
   $("cfLowerBtn").classList.remove("active");
   problemIndex=0;
   populateProblems();
-  buildPitchButtons();
   loadProblem(0);
 };
 $("cfLowerBtn").onclick=()=>{
@@ -766,7 +777,6 @@ $("cfLowerBtn").onclick=()=>{
   $("cfUpperBtn").classList.remove("active");
   problemIndex=0;
   populateProblems();
-  buildPitchButtons();
   loadProblem(0);
 };
 $("modeSelect").onchange=e=>{
@@ -831,12 +841,114 @@ setTempo(80);
 
 // --- analysis ---
 function isConsonant(cf,cp){const s=Math.abs(midiCounter(cp)-midiCantus(cf))%12;return [0,3,4,7,8,9].includes(s)}
+
+function melodicStep(a,b){return Math.abs(b.step-a.step)===1}
+function sameDirection(a,b,c){
+  const d1=Math.sign(b.step-a.step),d2=Math.sign(c.step-b.step);
+  return d1!==0&&d1===d2;
+}
+function passingShape(a,b,c){return melodicStep(a,b)&&melodicStep(b,c)&&sameDirection(a,b,c)}
+function neighborShape(a,b,c){return melodicStep(a,b)&&melodicStep(b,c)&&a.step===c.step}
+function finding(sev,title,loc,msg){return {sev,title,loc,msg}}
+function verticalInterval(cf,cp){return Math.abs(midiCounter(cp)-midiCantus(cf))%12}
+function motionType(cf1,cp1,cf2,cp2){
+  const a=midiCantus(cf2)-midiCantus(cf1);
+  const b=midiCounter(cp2)-midiCounter(cp1);
+  if(a===0&&b===0)return "静止";
+  if(a===0||b===0)return "斜行";
+  return Math.sign(a)!==Math.sign(b)?"反行":"同方向進行";
+}
+function analyzeContinuity12(){
+  const out=[];
+  const maxSlots=Math.min(counter.length,cantus.length*2);
+  for(let currentIndex=1;currentIndex<maxSlots;currentIndex++){
+    const previousIndex=currentIndex-1;
+    const a=counter[previousIndex],b=counter[currentIndex];
+    if(!a||!b||a.empty||b.empty||a.rest||b.rest)continue;
+
+    const measureA=Math.floor(previousIndex/2);
+    const measureB=Math.floor(currentIndex/2);
+    if(measureA>=cantus.length||measureB>=cantus.length)continue;
+
+    const ca=cantus[measureA],cb=cantus[measureB];
+    const i1=verticalInterval(ca,a),i2=verticalInterval(cb,b);
+    const mt=motionType(ca,a,cb,b);
+    const beatA=(previousIndex%2===0)?"強拍":"弱拍";
+    const beatB=(currentIndex%2===0)?"強拍":"弱拍";
+    const loc=`第${measureA+1}小節・${beatA} → 第${measureB+1}小節・${beatB}`;
+
+    if(i1===7&&i2===7)out.push(finding(mt==="反行"?"caution":"error","完全5度の連続",loc,`完全5度が連続しています。声部進行は「${mt}」です。`));
+    if(i1===0&&i2===0)out.push(finding(mt==="反行"?"caution":"error","完全8度の連続",loc,`完全8度が連続しています。声部進行は「${mt}」です。`));
+  }
+  return out;
+}
+function analyze(){
+  const out=[];
+  if(mode==="1:1"){
+    for(let i=0;i<cantus.length;i++){
+      const n=counter[i];
+      if(!n||n.empty||n.rest)continue;
+      const ok=isConsonant(cantus[i],n);
+      out.push(finding(ok?"good":"error","和声音程",`第${i+1}小節`,ok?"基本的な協和音程として扱えます。":"音程を確認してください。"));
+    }
+    return out;
+  }
+
+  for(let m=0;m<cantus.length;m++){
+    const cf=cantus[m],strong=counter[m*2],weak=counter[m*2+1];
+
+    if(strong&&!strong.empty&&!strong.rest){
+      const ok=isConsonant(cf,strong);
+      out.push(finding(ok?"good":"error","強拍の和声音程",`第${m+1}小節・強拍`,ok?"強拍の基本和声音程として扱えます。":"強拍では基本的に協和音程を確認してください。"));
+    }
+
+    if(!weak||weak.empty||weak.rest)continue;
+
+    if(isConsonant(cf,weak)){
+      out.push(finding("good","弱拍の協和音程",`第${m+1}小節・弱拍`,"弱拍は協和音程として扱えます。"));
+    }else{
+      const prev=strong,next=(m+1<cantus.length)?counter[(m+1)*2]:null;
+      if(!prev||prev.empty||prev.rest||!next||next.empty||next.rest){
+        out.push(finding("info","弱拍の不協和音程",`第${m+1}小節・弱拍`,"前後音が不足しているため自動判定を保留します。"));
+      }else if(passingShape(prev,weak,next)){
+        out.push(finding("good","弱拍の経過音",`第${m+1}小節・弱拍`,"順次進行による経過音候補として成立しています。"));
+      }else if(neighborShape(prev,weak,next)){
+        out.push(finding("good","弱拍の刺繍音",`第${m+1}小節・弱拍`,"刺繍音候補として成立しています。"));
+      }else{
+        out.push(finding("error","弱拍の不協和音程",`第${m+1}小節・弱拍`,"経過音または刺繍音としての条件を満たしていません。"));
+      }
+    }
+  }
+  out.push(...analyzeContinuity12());
+  return out;
+}
+
 $("analyzeBtn").onclick=()=>{
-  const a=analyze(),r=$("results");r.innerHTML="";
-  if(!a.length){r.innerHTML='<p class="muted">判定対象がありません。</p>';$("summaryBadge").textContent="未入力";return}
-  a.forEach(v=>{const d=document.createElement("div");d.className=`result ${v.sev}`;d.innerHTML=`<b>${v.title}</b><div class="loc">${v.loc}</div><div>${v.msg}</div>`;r.appendChild(d)});
-  const e=a.filter(v=>v.sev==="error").length,c=a.filter(v=>v.sev==="caution").length;
-  $("summaryBadge").textContent=e?`要修正 ${e}件`:c?`注意 ${c}件`:"適切";
+  try{
+    const a=analyze();
+    const r=$("results");
+    r.innerHTML="";
+
+    if(!a.length){
+      r.innerHTML='<p class="muted">判定対象がありません。対旋律を入力してから添削してください。</p>';
+      $("summaryBadge").textContent="未入力";
+    }else{
+      a.forEach(v=>{
+        const d=document.createElement("div");
+        d.className=`result ${v.sev}`;
+        d.innerHTML=`<b>${v.title}</b><div class="loc">${v.loc}</div><div>${v.msg}</div>`;
+        r.appendChild(d);
+      });
+      const errors=a.filter(v=>v.sev==="error").length;
+      const cautions=a.filter(v=>v.sev==="caution").length;
+      $("summaryBadge").textContent=errors?`要修正 ${errors}件`:cautions?`注意 ${cautions}件`:"適切";
+    }
+  }catch(err){
+    console.error("analysis error",err);
+    $("results").innerHTML='<div class="result error"><b>添削処理エラー</b><div>添削処理中にエラーが発生しました。</div></div>';
+    $("summaryBadge").textContent="エラー";
+  }
+
   requestAnimationFrame(()=>{
     document.querySelector(".feedback-card")?.scrollIntoView({behavior:"smooth",block:"start"});
   });
