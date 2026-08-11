@@ -14,7 +14,7 @@
   <div class="title-wrap">
     <div class="title-line">
       <h1>対位法トレーナー</h1>
-      <span class="version-pill">PWA v1.12</span>
+      <span class="version-pill">PWA v1.13</span>
     </div>
     <p>池内式 二声対位法</p>
   </div>
@@ -105,17 +105,25 @@
   </section>
 
   <section class="card score-card">
-    <div class="score-title">
-      <h2 id="cfTitle">定旋律</h2>
-      <span class="badge">全音符・固定</span>
+    <div id="cfBlock" class="voice-block cf-block">
+      <div class="score-title">
+        <h2 id="cfTitle">定旋律</h2>
+        <span class="badge">全音符・固定</span>
+      </div>
+      <div id="cantusScroll" class="score-scroll">
+        <canvas id="cantusCanvas" aria-label="定旋律"></canvas>
+      </div>
     </div>
-    <div id="cantusScroll" class="score-scroll"><canvas id="cantusCanvas" aria-label="定旋律"></canvas></div>
 
-    <div class="score-title cp-title">
-      <h2 id="cpTitle">対旋律</h2>
-      <span id="selectedPitch" class="badge">未選択</span>
+    <div id="cpBlock" class="voice-block cp-block">
+      <div class="score-title cp-title">
+        <h2 id="cpTitle">対旋律</h2>
+        <span id="selectedPitch" class="badge">未選択</span>
+      </div>
+      <div id="counterScroll" class="score-scroll editable-scroll">
+        <canvas id="counterCanvas" aria-label="対旋律"></canvas>
+      </div>
     </div>
-    <div id="counterScroll" class="score-scroll editable-scroll"><canvas id="counterCanvas" aria-label="対旋律"></canvas></div>
   </section>
 
   <section class="card input-card">

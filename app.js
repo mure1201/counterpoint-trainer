@@ -1,5 +1,5 @@
 
-const APP_VERSION="1.12.0";
+const APP_VERSION="1.13.0";
 const $=id=>document.getElementById(id);
 
 const cfC=$("cantusCanvas"), cpC=$("counterCanvas");
@@ -55,23 +55,22 @@ function loadProblem(i){
 }
 
 function updateVoiceLayout(){
-  const scoreCard=document.querySelector(".score-card");
   const cfTitle=$("cfTitle");
   const cpTitle=$("cpTitle");
+  const cfBlock=$("cfBlock");
+  const cpBlock=$("cpBlock");
+
   cfTitle.innerHTML=`定旋律 <span class="voice-caption">（${cfVoice==="upper"?"上声":"下声"}）</span>`;
   cpTitle.innerHTML=`対旋律 <span class="voice-caption">（${cfVoice==="upper"?"下声":"上声"}）</span>`;
 
-  const cfWrap=$("cantusScroll");
-  const cpWrap=$("counterScroll");
-  const cfHeading=cfWrap.previousElementSibling;
-  const cpHeading=cpWrap.previousElementSibling;
-
+  // DOMを移動せず、flex orderだけで上下を切替。
+  // これによりcanvas wrapperの参照が壊れない。
   if(cfVoice==="upper"){
-    scoreCard.insertBefore(cfHeading,scoreCard.firstChild);
-    scoreCard.insertBefore(cfWrap,cpHeading);
+    cfBlock.style.order="1";
+    cpBlock.style.order="2";
   }else{
-    scoreCard.insertBefore(cpHeading,scoreCard.firstChild);
-    scoreCard.insertBefore(cpWrap,cfHeading);
+    cpBlock.style.order="1";
+    cfBlock.style.order="2";
   }
 }
 
@@ -81,9 +80,13 @@ function clearFeedback(){
 }
 
 function setCanvasWidth(c,measureCount){
-  const viewport=Math.max(320,c.parentElement?.clientWidth||320);
-  const logicalWidth=Math.max(viewport,NOTE_LEFT+RIGHT+measureCount*measureWidth);
+  const wrap=c.parentElement;
+  const viewport=Math.max(320,wrap?.clientWidth||320);
+  const logicalWidth=Math.max(viewport+1,NOTE_LEFT+RIGHT+measureCount*measureWidth);
+
   c.style.width=`${logicalWidth}px`;
+  c.style.minWidth=`${logicalWidth}px`;
+  c.style.height="220px";
 }
 function resize(c){
   const r=devicePixelRatio||1,b=c.getBoundingClientRect();
@@ -293,41 +296,91 @@ function redraw(){
 }
 
 // --- interaction ---
-function point(e,c){const r=c.getBoundingClientRect();return{x:e.clientX-r.left,y:e.clientY-r.top}}
+function point(e,c){
+  const r=c.getBoundingClientRect();
+  return{x:e.clientX-r.left,y:e.clientY-r.top};
+}
 function beginEdit(){pushHistory();clearFeedback()}
+
+let pointerStart=null;
+let pointerMode="idle"; // idle / tap / note-drag / scroll
+let historyPushedForGesture=false;
+
 cpC.addEventListener("pointerdown",e=>{
   const p=point(e,cpC);
-
-  // v1.11: 薄青の楽譜領域全体が入力範囲。
   if(!pointInEditableZone(p,cpC.clientWidth))return;
 
   const i=idx(p.x,counter.length,cpC.clientWidth);
-
-  beginEdit();
+  pointerStart={x:p.x,y:p.y,i};
+  pointerMode="tap";
+  historyPushedForGesture=false;
   selected=i;
-  drag=true;
-
-  // タップした高さに音符を表示。
-  counter[i].step=stepFromY(p.y);
-  counter[i].acc=0;
-  counter[i].rest=false;
-  counter[i].empty=false;
-
   redraw();
-  e.preventDefault();
 });
+
 cpC.addEventListener("pointermove",e=>{
-  if(!drag||selected==null)return;
-  const p=point(e,cpC);
-  if(!pointInEditableZone(p,cpC.clientWidth))return;
+  if(!pointerStart)return;
 
-  counter[selected].step=stepFromY(p.y);
-  counter[selected].empty=false;
-  counter[selected].rest=false;
-  redraw();
-  e.preventDefault();
+  const p=point(e,cpC);
+  const dx=p.x-pointerStart.x;
+  const dy=p.y-pointerStart.y;
+
+  // 横方向の動きはスクロールとして扱い、音符を変更しない。
+  if(pointerMode==="tap" && Math.abs(dx)>10 && Math.abs(dx)>Math.abs(dy)){
+    pointerMode="scroll";
+    return;
+  }
+
+  // 既に入力済みの音符だけ、縦ドラッグで音高変更。
+  if(pointerMode==="tap" &&
+     !counter[pointerStart.i].empty &&
+     !counter[pointerStart.i].rest &&
+     Math.abs(dy)>8 &&
+     Math.abs(dy)>Math.abs(dx)){
+    pointerMode="note-drag";
+    if(!historyPushedForGesture){
+      beginEdit();
+      historyPushedForGesture=true;
+    }
+  }
+
+  if(pointerMode==="note-drag"){
+    if(!pointInEditableZone(p,cpC.clientWidth))return;
+    counter[pointerStart.i].step=stepFromY(p.y);
+    counter[pointerStart.i].empty=false;
+    counter[pointerStart.i].rest=false;
+    redraw();
+    e.preventDefault();
+  }
 });
-cpC.addEventListener("pointerup",()=>drag=false);cpC.addEventListener("pointercancel",()=>drag=false);
+
+cpC.addEventListener("pointerup",e=>{
+  if(!pointerStart)return;
+
+  const p=point(e,cpC);
+  const i=pointerStart.i;
+
+  if(pointerMode==="tap" && pointInEditableZone(p,cpC.clientWidth)){
+    // 短いタップのときだけ新規入力／位置変更。
+    beginEdit();
+    selected=i;
+    counter[i].step=stepFromY(p.y);
+    counter[i].acc=0;
+    counter[i].rest=false;
+    counter[i].empty=false;
+    redraw();
+  }
+
+  pointerStart=null;
+  pointerMode="idle";
+  historyPushedForGesture=false;
+});
+
+cpC.addEventListener("pointercancel",()=>{
+  pointerStart=null;
+  pointerMode="idle";
+  historyPushedForGesture=false;
+});
 
 function ensureSelected(){
   if(selected==null){selected=counter.findIndex(n=>n.empty);if(selected<0)selected=0}
@@ -501,6 +554,10 @@ function setMeasureWidth(px,save=true){
   }
 
   redraw();
+  requestAnimationFrame(()=>{
+    const a=$("cantusScroll"),b=$("counterScroll");
+    if(a&&b)b.scrollLeft=a.scrollLeft;
+  });
 }
 $("measureCompactBtn").onclick=()=>setMeasureWidth(110);
 $("measureStandardBtn").onclick=()=>setMeasureWidth(150);
@@ -511,9 +568,12 @@ try{
   if([110,150,200].includes(saved))measureWidth=saved;
 }catch(e){}
 
+let syncingScroll=false;
 function syncScoreScroll(source,target){
-  if(!source||!target)return;
+  if(!source||!target||syncingScroll)return;
+  syncingScroll=true;
   target.scrollLeft=source.scrollLeft;
+  requestAnimationFrame(()=>{syncingScroll=false});
 }
 $("cantusScroll").addEventListener("scroll",()=>syncScoreScroll($("cantusScroll"),$("counterScroll")),{passive:true});
 $("counterScroll").addEventListener("scroll",()=>syncScoreScroll($("counterScroll"),$("cantusScroll")),{passive:true});
