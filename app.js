@@ -1,5 +1,5 @@
 
-const APP_VERSION="1.17.0";
+const APP_VERSION="1.18.0";
 const $=id=>document.getElementById(id);
 
 const cfC=$("cantusCanvas"), cpC=$("counterCanvas");
@@ -12,6 +12,11 @@ let measureWidth=150; // v1.12: 110 / 150 / 200 px から選択
 
 let mode="1:2", selected=null, drag=false;
 let cfVoice="upper";
+const VOICE_SHIFT=7; // 1オクターブ相当のダイアトニック段差
+function counterpointRegisterShift(){
+  // 定旋律が上声なら対旋律は下声へ。定旋律が下声なら対旋律は上声へ。
+  return cfVoice==="upper" ? -VOICE_SHIFT : VOICE_SHIFT;
+}
 let selectedModeName="長旋法";
 let problemIndex=0, cantus=[], counter=[];
 let history=[], future=[];
@@ -239,7 +244,7 @@ function loadProblem(i){
   cantus=list[problemIndex].steps.map(s=>noteObj(s));
 
   const slots=mode==="1:2"?cantus.length*2:cantus.length;
-  counter=Array.from({length:slots},()=>noteObj(4,0,false,true));
+  counter=Array.from({length:slots},()=>noteObj(4+counterpointRegisterShift(),0,false,true));
 
   selected=null;history=[];future=[];
   populateProblems();
@@ -307,29 +312,17 @@ function resize(c){
 }
 function y(step){return C4Y-step*(LINE/2)}
 function stepFromY(v){return Math.max(-8,Math.min(22,Math.round((C4Y-v)/(LINE/2))))}
-function x(i,n,w){return NOTE_LEFT+(w-NOTE_LEFT-RIGHT)*(i+.5)/n}
-function idx(px,n,w){return Math.max(0,Math.min(n-1,Math.floor(((px-NOTE_LEFT)/(w-NOTE_LEFT-RIGHT))*n)))}
-function baseName(step){const N=["C","D","E","F","G","A","B"],o=Math.floor(step/7),i=((step%7)+7)%7;return {letter:N[i],octave:4+o}}
-function noteNameObj(n){const b=baseName(n.step),a=n.acc===1?"♯":n.acc===-1?"♭":"";return `${b.letter}${a}${b.octave}`}
-function baseMidi(step){const B=[60,62,64,65,67,69,71],o=Math.floor(step/7),i=((step%7)+7)%7;return B[i]+o*12}
-function midi(n){return baseMidi(n.step)+n.acc}
-
-// --- notation drawing ---
-// ト音記号：G線（下から2本目）を中心とするループと、中央付近の交差が五線に自然に重なるサイズ
-function drawClef(ctx,staffTop=TOP,staffLeft=STAFF_LEFT){
-  ctx.save();
-  ctx.fillStyle="#111";
-
-  // v1.8:
-  // v1.7より少し大きく、少し下へ移動。
-  // 記号内の3つの主要な交差位置が、上から五線の第2線・第3線・第5線に
-  // できるだけ重なるように配置する。
-  ctx.font="140px 'Times New Roman', Georgia, serif";
-  ctx.textAlign="center";
-  ctx.textBaseline="middle";
-  ctx.fillText("𝄞",52,staffTop+LINE*1.68);
-
-  ctx.restore();
+function x(i,n,w){
+  return NOTE_LEFT+(w-NOTE_LEFT-RIGHT)*(i+.5)/n;
+}
+function noteX(i,n,w,type){
+  const base=x(i,n,w);
+  if(type==="whole"){
+    // v1.18: 全音符は小節中央ではなく左寄り（小節幅の約32%地点）
+    const slotW=(w-NOTE_LEFT-RIGHT)/n;
+    return NOTE_LEFT+slotW*i+slotW*0.32;
+  }
+  return base;
 }
 
 // 可変太さの白抜き音符頭。
@@ -531,7 +524,7 @@ function drawStaff(ctx,c,notes,slots,type,editable){
   ctx.restore();
 
   notes.forEach((n,i)=>{
-    const xx=x(i,notes.length,w);
+    const xx=noteX(i,notes.length,w,type);
 
     // v1.11: 未入力スロットは楽譜上に何も表示しない。
     if(n.empty)return;
@@ -696,13 +689,25 @@ $("restBtn").onclick=()=>applyEdit(n=>{n.rest=true;n.empty=false});
 $("undoBtn").onclick=undo;$("redoBtn").onclick=redo;
 
 function buildPitchButtons(){
-  const wrap=$("pitchButtons");wrap.innerHTML="";
+  const wrap=$("pitchButtons");
+  wrap.innerHTML="";
+
+  // 下声ならC3〜、上声ならC4〜を基本レンジにする。
+  const shift=counterpointRegisterShift();
+  const start = cfVoice==="upper" ? -7 : 0; // CF上声→対旋律下声 = C3基準
   const steps=[];
-  for(let s=0;s<=11;s++)steps.push(s); // C4〜D5程度
+  for(let s=start;s<=start+11;s++)steps.push(s);
+
   steps.forEach(s=>{
-    const n=noteObj(s),b=document.createElement("button");
+    const n=noteObj(s);
+    const b=document.createElement("button");
     b.textContent=noteNameObj(n);
-    b.onclick=()=>applyEdit(x=>{x.step=s;x.acc=0;x.rest=false;x.empty=false});
+    b.onclick=()=>applyEdit(x=>{
+      x.step=s;
+      x.acc=0;
+      x.rest=false;
+      x.empty=false;
+    });
     wrap.appendChild(b);
   });
 }
@@ -723,6 +728,7 @@ $("cfUpperBtn").onclick=()=>{
   $("cfLowerBtn").classList.remove("active");
   problemIndex=0;
   populateProblems();
+  buildPitchButtons();
   loadProblem(0);
 };
 $("cfLowerBtn").onclick=()=>{
@@ -731,6 +737,7 @@ $("cfLowerBtn").onclick=()=>{
   $("cfUpperBtn").classList.remove("active");
   problemIndex=0;
   populateProblems();
+  buildPitchButtons();
   loadProblem(0);
 };
 $("modeSelect").onchange=e=>{
@@ -877,6 +884,13 @@ $("analyzeBtn").onclick=()=>{
   a.forEach(v=>{const d=document.createElement("div");d.className=`result ${v.sev}`;d.innerHTML=`<b>${v.title}</b><div class="loc">${v.loc}</div><div>${v.msg}</div>`;r.appendChild(d)});
   const e=a.filter(v=>v.sev==="error").length,c=a.filter(v=>v.sev==="caution").length;
   $("summaryBadge").textContent=e?`要修正 ${e}件`:c?`注意 ${c}件`:"適切";
+  // v1.18: 採点後、添削結果まで自動スクロール
+  requestAnimationFrame(()=>{
+    document.querySelector(".feedback-card")?.scrollIntoView({
+      behavior:"smooth",
+      block:"start"
+    });
+  });
 };
 
 window.addEventListener("load",()=>{redraw()});
@@ -944,5 +958,6 @@ if("serviceWorker"in navigator){
 
 $("modeSelect").value="major";
 populateProblems();
+buildPitchButtons();
 loadProblem(0);
 setMeasureWidth(measureWidth,false);
