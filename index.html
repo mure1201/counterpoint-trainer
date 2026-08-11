@@ -7,12 +7,11 @@
 <main>
 <section class="card"><strong>入力モード</strong>
 <div class="mode-switch"><button id="mode12Btn" class="mode active">全音符：二分音符（1:2）</button><button id="mode11Btn" class="mode">全音符：全音符（1:1）</button></div>
-<p id="modeHelp">定旋律は全音符、対旋律は二分音符で入力します。</p></section>
+<p id="modeHelp">定旋律は全音符、対旋律は二分音符で入力します。強拍・弱拍・完全5度/8度の連続を判定します。</p></section>
 <section class="card"><div class="section-title"><h2>定旋律</h2><span class="badge">全音符・固定</span></div><canvas id="cantusCanvas"></canvas></section>
 <section class="card"><div class="section-title"><h2>対旋律</h2><span id="selectedPitch" class="badge">未選択</span></div><canvas id="counterCanvas"></canvas>
-<div class="controls"><button id="upBtn">↑ 上げる</button><button id="downBtn">↓ 下げる</button><button id="restBtn">休符</button></div></section>
+<div class="controls"><button id="upBtn">↑ 上げる</button><button id="downBtn">↓ 下げる</button><button id="sharpBtn">♯</button><button id="flatBtn">♭</button><button id="naturalBtn">♮</button><button id="restBtn">休符</button></div></section>
 <section class="card"><div class="controls"><button id="analyzeBtn" class="primary">この対旋律を添削</button><button id="resetBtn">最初に戻す</button><button id="clearBtn">全音削除</button></div></section>
-<section class="card"><div class="section-title"><h2>添削結果</h2><span id="summaryBadge" class="badge">未判定</span></div><div id="results"><p class="muted">「この対旋律を添削」を押すと結果を表示します。</p></div></section>
-<section class="card"><div class="section-title"><h2>バージョン</h2><span class="badge" id="versionBadge">v0.5</span></div>
-<p class="muted">新しい版が公開された場合は自動更新します。更新待ちのときは右上に「更新」が表示されます。</p></section>
+<section class="card"><div class="section-title"><h2>添削結果</h2><span id="summaryBadge" class="badge">未判定</span></div><div id="results"><p class="muted">強拍・弱拍・連続完全協和音程をまとめて判定します。</p></div></section>
+<section class="card"><div class="section-title"><h2>バージョン</h2><span class="badge">v0.9</span></div><p class="muted">音符と休符の描画を見直し、iPhoneでも安定してきれいに表示します。</p></section>
 </main><script src="app.js"></script></body></html>
