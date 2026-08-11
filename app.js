@@ -1,5 +1,5 @@
 
-const APP_VERSION="1.10.0";
+const APP_VERSION="1.12.0";
 const $=id=>document.getElementById(id);
 
 const cfC=$("cantusCanvas"), cpC=$("counterCanvas");
@@ -8,6 +8,7 @@ const cfX=cfC.getContext("2d"), cpX=cpC.getContext("2d");
 const LINE=16, TOP=62;
 const STAFF_LEFT=18, NOTE_LEFT=76, RIGHT=12;
 const C4Y=TOP+LINE*5, LEDGER_HALF=14;
+let measureWidth=150; // v1.12: 110 / 150 / 200 px から選択
 
 let mode="1:2", selected=null, drag=false;
 let cfVoice="upper";
@@ -32,7 +33,7 @@ const PROBLEMS=[
 {name:"問題12",steps:[0,1,2,5,4,3,5,2,1,0]}
 ];
 
-function noteObj(step,acc=0,rest=false){return {step,acc,rest}}
+function noteObj(step,acc=0,rest=false,empty=false){return {step,acc,rest,empty}}
 function cloneCounter(){return counter.map(n=>({...n}))}
 function pushHistory(){history.push(cloneCounter());if(history.length>80)history.shift();future=[]}
 function undo(){if(!history.length)return;future.push(cloneCounter());counter=history.pop();selected=null;redraw()}
@@ -46,7 +47,7 @@ function loadProblem(i){
   problemIndex=(i+PROBLEMS.length)%PROBLEMS.length;
   cantus=PROBLEMS[problemIndex].steps.map(s=>noteObj(s));
   const slots=mode==="1:2"?cantus.length*2:cantus.length;
-  counter=Array.from({length:slots},()=>noteObj(4,0,true));
+  counter=Array.from({length:slots},()=>noteObj(4,0,false,true));
   selected=null;history=[];future=[];
   $("problemSelect").value=problemIndex;
   $("problemCount").textContent=`${problemIndex+1} / ${PROBLEMS.length}`;
@@ -60,17 +61,17 @@ function updateVoiceLayout(){
   cfTitle.innerHTML=`定旋律 <span class="voice-caption">（${cfVoice==="upper"?"上声":"下声"}）</span>`;
   cpTitle.innerHTML=`対旋律 <span class="voice-caption">（${cfVoice==="upper"?"下声":"上声"}）</span>`;
 
-  const cfCanvas=$("cantusCanvas");
-  const cpCanvas=$("counterCanvas");
-  const cfHeading=cfCanvas.previousElementSibling;
-  const cpHeading=cpCanvas.previousElementSibling;
+  const cfWrap=$("cantusScroll");
+  const cpWrap=$("counterScroll");
+  const cfHeading=cfWrap.previousElementSibling;
+  const cpHeading=cpWrap.previousElementSibling;
 
   if(cfVoice==="upper"){
-    scoreCard.insertBefore(cfHeading, scoreCard.firstChild);
-    scoreCard.insertBefore(cfCanvas, cpHeading);
+    scoreCard.insertBefore(cfHeading,scoreCard.firstChild);
+    scoreCard.insertBefore(cfWrap,cpHeading);
   }else{
-    scoreCard.insertBefore(cpHeading, scoreCard.firstChild);
-    scoreCard.insertBefore(cpCanvas, cfHeading);
+    scoreCard.insertBefore(cpHeading,scoreCard.firstChild);
+    scoreCard.insertBefore(cpWrap,cfHeading);
   }
 }
 
@@ -79,9 +80,15 @@ function clearFeedback(){
   $("summaryBadge").textContent="未判定";
 }
 
+function setCanvasWidth(c,measureCount){
+  const viewport=Math.max(320,c.parentElement?.clientWidth||320);
+  const logicalWidth=Math.max(viewport,NOTE_LEFT+RIGHT+measureCount*measureWidth);
+  c.style.width=`${logicalWidth}px`;
+}
 function resize(c){
   const r=devicePixelRatio||1,b=c.getBoundingClientRect();
-  c.width=b.width*r;c.height=b.height*r;
+  c.width=Math.floor(b.width*r);
+  c.height=Math.floor(b.height*r);
   c.getContext("2d").setTransform(r,0,0,r,0,0);
 }
 function y(step){return C4Y-step*(LINE/2)}
@@ -207,46 +214,35 @@ function lineThroughHead(ctx,px,step){
   ctx.beginPath();ctx.moveTo(px-(isLedger?LEDGER_HALF:10.8),py);ctx.lineTo(px+(isLedger?LEDGER_HALF:10.8),py);ctx.stroke();ctx.restore();
 }
 
-function operationZoneForNote(n,xx,type){
-  const centerY = n.rest ? TOP+LINE*2.35 : y(n.step);
-  // 音符頭のまわりだけを操作可能にする。
-  // 休符は中央付近の小さな範囲。
+function editableZone(canvasWidth){
   return {
-    x:xx-22,
-    y:centerY-21,
-    w:44,
-    h:42,
-    cx:xx,
-    cy:centerY
+    x:NOTE_LEFT-10,
+    y:TOP-LINE*2.0,
+    w:canvasWidth-NOTE_LEFT-RIGHT+12,
+    h:LINE*8.0
   };
 }
-function roundRectPath(ctx,x,y,w,h,r){
-  const rr=Math.min(r,w/2,h/2);
-  ctx.beginPath();
-  ctx.moveTo(x+rr,y);
-  ctx.arcTo(x+w,y,x+w,y+h,rr);
-  ctx.arcTo(x+w,y+h,x,y+h,rr);
-  ctx.arcTo(x,y+h,x,y,rr);
-  ctx.arcTo(x,y,x+w,y,rr);
-  ctx.closePath();
-}
-function drawOperationZone(ctx,zone,isSelected){
+function drawEditableZone(ctx,canvasWidth){
+  const z=editableZone(canvasWidth);
   ctx.save();
-  ctx.fillStyle=isSelected?"rgba(47,128,237,0.11)":"rgba(47,128,237,0.055)";
-  ctx.strokeStyle=isSelected?"rgba(47,128,237,0.75)":"rgba(47,128,237,0.32)";
-  ctx.lineWidth=isSelected?1.6:1.0;
-  roundRectPath(ctx,zone.x,zone.y,zone.w,zone.h,9);
+  ctx.fillStyle="rgba(47,128,237,0.055)";
+  ctx.strokeStyle="rgba(47,128,237,0.28)";
+  ctx.lineWidth=1.1;
+  roundRectPath(ctx,z.x,z.y,z.w,z.h,12);
   ctx.fill();
   ctx.stroke();
   ctx.restore();
 }
-function pointInZone(p,zone){
-  return p.x>=zone.x && p.x<=zone.x+zone.w && p.y>=zone.y && p.y<=zone.y+zone.h;
+function pointInEditableZone(p,canvasWidth){
+  const z=editableZone(canvasWidth);
+  return p.x>=z.x && p.x<=z.x+z.w && p.y>=z.y && p.y<=z.y+z.h;
 }
 
 function drawStaff(ctx,c,notes,slots,type,editable){
   const w=c.clientWidth,h=c.clientHeight;ctx.clearRect(0,0,w,h);
   ctx.strokeStyle="#111";ctx.fillStyle="#111";ctx.lineWidth=1;
+
+  if(editable)drawEditableZone(ctx,w);
 
   for(let i=0;i<5;i++){
     const yy=TOP+i*LINE;ctx.beginPath();ctx.moveTo(STAFF_LEFT,yy);ctx.lineTo(w-RIGHT,yy);ctx.stroke();
@@ -264,10 +260,8 @@ function drawStaff(ctx,c,notes,slots,type,editable){
   notes.forEach((n,i)=>{
     const xx=x(i,notes.length,w);
 
-    if(editable){
-      const zone=operationZoneForNote(n,xx,type);
-      drawOperationZone(ctx,zone,selected===i);
-    }
+    // v1.11: 未入力スロットは楽譜上に何も表示しない。
+    if(n.empty)return;
 
     if(n.rest){
       type==="whole"?drawWholeRest(ctx,xx):drawHalfRest(ctx,xx);
@@ -283,10 +277,19 @@ function drawStaff(ctx,c,notes,slots,type,editable){
   });
 }
 function redraw(){
+  const measures=cantus.length;
+  setCanvasWidth(cfC,measures);
+  setCanvasWidth(cpC,measures);
+
   resize(cfC);resize(cpC);
   drawStaff(cfX,cfC,cantus,1,"whole",false);
   drawStaff(cpX,cpC,counter,mode==="1:2"?2:1,mode==="1:2"?"half":"whole",true);
-  $("selectedPitch").textContent=selected==null?"未選択":counter[selected].rest?"休符":noteNameObj(counter[selected]);
+
+  $("selectedPitch").textContent=
+    selected==null?"未選択":
+    counter[selected].empty?"未入力":
+    counter[selected].rest?"休符":
+    noteNameObj(counter[selected]);
 }
 
 // --- interaction ---
@@ -294,48 +297,48 @@ function point(e,c){const r=c.getBoundingClientRect();return{x:e.clientX-r.left,
 function beginEdit(){pushHistory();clearFeedback()}
 cpC.addEventListener("pointerdown",e=>{
   const p=point(e,cpC);
-  const i=idx(p.x,counter.length,cpC.clientWidth);
-  const xx=x(i,counter.length,cpC.clientWidth);
-  const zone=operationZoneForNote(counter[i],xx,mode==="1:2"?"half":"whole");
 
-  // v1.9: 薄青の操作範囲外では音符を動かさない。
-  if(!pointInZone(p,zone)){
-    return;
-  }
+  // v1.11: 薄青の楽譜領域全体が入力範囲。
+  if(!pointInEditableZone(p,cpC.clientWidth))return;
+
+  const i=idx(p.x,counter.length,cpC.clientWidth);
 
   beginEdit();
   selected=i;
   drag=true;
 
-  // 既存の休符を最初に触った時は、その位置を選択するだけ。
-  // 休符から音符にしたい場合は音高ボタン等を使用。
-  if(!counter[i].rest){
-    counter[i].step=stepFromY(p.y);
-  }
+  // タップした高さに音符を表示。
+  counter[i].step=stepFromY(p.y);
+  counter[i].acc=0;
+  counter[i].rest=false;
+  counter[i].empty=false;
 
   redraw();
   e.preventDefault();
 });
 cpC.addEventListener("pointermove",e=>{
   if(!drag||selected==null)return;
-  if(counter[selected].rest)return;
   const p=point(e,cpC);
+  if(!pointInEditableZone(p,cpC.clientWidth))return;
+
   counter[selected].step=stepFromY(p.y);
+  counter[selected].empty=false;
+  counter[selected].rest=false;
   redraw();
   e.preventDefault();
 });
 cpC.addEventListener("pointerup",()=>drag=false);cpC.addEventListener("pointercancel",()=>drag=false);
 
 function ensureSelected(){
-  if(selected==null){selected=counter.findIndex(n=>n.rest);if(selected<0)selected=0}
+  if(selected==null){selected=counter.findIndex(n=>n.empty);if(selected<0)selected=0}
 }
 function applyEdit(fn){ensureSelected();beginEdit();fn(counter[selected]);redraw()}
-$("upBtn").onclick=()=>applyEdit(n=>{n.step=Math.min(22,n.step+1);n.rest=false});
-$("downBtn").onclick=()=>applyEdit(n=>{n.step=Math.max(-8,n.step-1);n.rest=false});
-$("sharpBtn").onclick=()=>applyEdit(n=>{n.acc=1;n.rest=false});
-$("flatBtn").onclick=()=>applyEdit(n=>{n.acc=-1;n.rest=false});
-$("naturalBtn").onclick=()=>applyEdit(n=>{n.acc=0;n.rest=false});
-$("restBtn").onclick=()=>applyEdit(n=>{n.rest=true});
+$("upBtn").onclick=()=>applyEdit(n=>{n.step=Math.min(22,n.step+1);n.rest=false;n.empty=false});
+$("downBtn").onclick=()=>applyEdit(n=>{n.step=Math.max(-8,n.step-1);n.rest=false;n.empty=false});
+$("sharpBtn").onclick=()=>applyEdit(n=>{n.acc=1;n.rest=false;n.empty=false});
+$("flatBtn").onclick=()=>applyEdit(n=>{n.acc=-1;n.rest=false;n.empty=false});
+$("naturalBtn").onclick=()=>applyEdit(n=>{n.acc=0;n.rest=false;n.empty=false});
+$("restBtn").onclick=()=>applyEdit(n=>{n.rest=true;n.empty=false});
 $("undoBtn").onclick=undo;$("redoBtn").onclick=redo;
 
 function buildPitchButtons(){
@@ -345,7 +348,7 @@ function buildPitchButtons(){
   steps.forEach(s=>{
     const n=noteObj(s),b=document.createElement("button");
     b.textContent=noteNameObj(n);
-    b.onclick=()=>applyEdit(x=>{x.step=s;x.acc=0;x.rest=false});
+    b.onclick=()=>applyEdit(x=>{x.step=s;x.acc=0;x.rest=false;x.empty=false});
     wrap.appendChild(b);
   });
 }
@@ -381,13 +384,13 @@ $("problemSelect").onchange=e=>loadProblem(Number(e.target.value));
 $("prevProblemBtn").onclick=()=>loadProblem(problemIndex-1);
 $("nextProblemBtn").onclick=()=>loadProblem(problemIndex+1);
 $("resetBtn").onclick=()=>loadProblem(problemIndex);
-$("clearBtn").onclick=()=>{pushHistory();counter.forEach(n=>n.rest=true);selected=null;clearFeedback();redraw()};
+$("clearBtn").onclick=()=>{pushHistory();counter.forEach(n=>{n.empty=true;n.rest=false;n.acc=0});selected=null;clearFeedback();redraw()};
 
 // --- audio ---
 function ensureAudio(){if(!audioCtx)audioCtx=new (window.AudioContext||window.webkitAudioContext)();if(audioCtx.state==="suspended")audioCtx.resume();return audioCtx}
 function stopPlayback(){activeNodes.forEach(n=>{try{n.stop()}catch{}});activeNodes=[]}
 function scheduleTone(n,start,dur,gainValue=.08,type="sine"){
-  if(!n||n.rest)return;const ac=ensureAudio(),o=ac.createOscillator(),g=ac.createGain();
+  if(!n||n.empty||n.rest)return;const ac=ensureAudio(),o=ac.createOscillator(),g=ac.createGain();
   o.type=type;o.frequency.value=440*Math.pow(2,(midi(n)-69)/12);
   g.gain.setValueAtTime(.0001,start);g.gain.exponentialRampToValueAtTime(gainValue,start+.015);
   g.gain.setValueAtTime(gainValue,Math.max(start+.02,start+dur-.04));g.gain.exponentialRampToValueAtTime(.0001,start+dur);
@@ -437,7 +440,7 @@ function motionType(cf1,cp1,cf2,cp2){const a=midi(cf2)-midi(cf1),b=midi(cp2)-mid
 function analyzeContinuity12(){
   const out=[];
   for(let slot=1;slot<counter.length;slot++){
-    const a=counter[slot-1],b=counter[slot];if(a.rest||b.rest)continue;
+    const a=counter[slot-1],b=counter[slot];if(a.empty||b.empty||a.rest||b.rest)continue;
     const ca=cantus[Math.floor((slot-1)/2)],cb=cantus[Math.floor(slot/2)],i1=verticalInterval(ca,a),i2=verticalInterval(cb,b),mt=motionType(ca,a,cb,b);
     const l1=((slot-1)%2===0)?"強拍":"弱拍",l2=(slot%2===0)?"強拍":"弱拍",loc=`位置${slot}(${l1}) → ${slot+1}(${l2})`;
     if(i1===7&&i2===7)out.push(finding(mt==="反行"?"caution":"error","完全5度の連続",loc,`完全5度が連続しています。声部進行は「${mt}」です。`));
@@ -449,17 +452,17 @@ function analyze(){
   const className=mode==="1:2"?"第2類":"第1類";
   const out=[];
   if(mode==="1:1"){
-    counter.forEach((n,i)=>{if(n.rest)return;out.push(finding(isConsonant(cantus[i],n)?"good":"error","和声音程",`第${i+1}小節`,isConsonant(cantus[i],n)?"基本的な協和音程として扱えます。":"音程を確認してください。"))});
+    counter.forEach((n,i)=>{if(n.empty||n.rest)return;out.push(finding(isConsonant(cantus[i],n)?"good":"error","和声音程",`第${i+1}小節`,isConsonant(cantus[i],n)?"基本的な協和音程として扱えます。":"音程を確認してください。"))});
     return out;
   }
   for(let m=0;m<cantus.length;m++){
     const cf=cantus[m],strong=counter[m*2],weak=counter[m*2+1];
-    if(strong&&!strong.rest)out.push(finding(isConsonant(cf,strong)?"good":"error","強拍の和声音程",`第${m+1}小節・強拍`,isConsonant(cf,strong)?"強拍の基本和声音程として扱えます。":"強拍では基本的に協和音程を確認してください。"));
-    if(!weak||weak.rest)continue;
+    if(strong&&!strong.empty&&!strong.rest)out.push(finding(isConsonant(cf,strong)?"good":"error","強拍の和声音程",`第${m+1}小節・強拍`,isConsonant(cf,strong)?"強拍の基本和声音程として扱えます。":"強拍では基本的に協和音程を確認してください。"));
+    if(!weak||weak.empty||weak.rest)continue;
     if(isConsonant(cf,weak))out.push(finding("good","弱拍の協和音程",`第${m+1}小節・弱拍`,"弱拍は協和音程として扱えます。"));
     else{
       const prev=strong,next=(m+1<cantus.length)?counter[(m+1)*2]:null;
-      if(!prev||prev.rest||!next||next.rest)out.push(finding("info","弱拍の不協和音程",`第${m+1}小節・弱拍`,"前後音が不足しているため自動判定を保留します。"));
+      if(!prev||prev.empty||prev.rest||!next||next.empty||next.rest)out.push(finding("info","弱拍の不協和音程",`第${m+1}小節・弱拍`,"前後音が不足しているため自動判定を保留します。"));
       else if(passingShape(prev,weak,next))out.push(finding("good","弱拍の経過音",`第${m+1}小節・弱拍`,"順次進行による経過音候補として成立しています。"));
       else if(neighborShape(prev,weak,next))out.push(finding("good","弱拍の刺繍音",`第${m+1}小節・弱拍`,"刺繍音候補として成立しています。"));
       else out.push(finding("error","弱拍の不協和音程",`第${m+1}小節・弱拍`,"経過音または刺繍音としての条件を満たしていません。"));
@@ -478,6 +481,43 @@ $("analyzeBtn").onclick=()=>{
 window.addEventListener("load",()=>{redraw()});
 window.addEventListener("resize",()=>{redraw()});
 
+
+
+function setMeasureWidth(px,save=true){
+  measureWidth=px;
+
+  const mapping={
+    110:"measureCompactBtn",
+    150:"measureStandardBtn",
+    200:"measureWideBtn"
+  };
+  Object.values(mapping).forEach(id=>$(id)?.classList.remove("active"));
+  $(mapping[px])?.classList.add("active");
+
+  $("measureWidthValue").textContent=`${px} px / 小節`;
+
+  if(save){
+    try{localStorage.setItem("counterpointMeasureWidth",String(px))}catch(e){}
+  }
+
+  redraw();
+}
+$("measureCompactBtn").onclick=()=>setMeasureWidth(110);
+$("measureStandardBtn").onclick=()=>setMeasureWidth(150);
+$("measureWideBtn").onclick=()=>setMeasureWidth(200);
+
+try{
+  const saved=Number(localStorage.getItem("counterpointMeasureWidth"));
+  if([110,150,200].includes(saved))measureWidth=saved;
+}catch(e){}
+
+function syncScoreScroll(source,target){
+  if(!source||!target)return;
+  target.scrollLeft=source.scrollLeft;
+}
+$("cantusScroll").addEventListener("scroll",()=>syncScoreScroll($("cantusScroll"),$("counterScroll")),{passive:true});
+$("counterScroll").addEventListener("scroll",()=>syncScoreScroll($("counterScroll"),$("cantusScroll")),{passive:true});
+
 // auto update
 let waitingWorker=null;
 function showUpdate(worker){waitingWorker=worker;$("updateBtn").hidden=false}
@@ -493,3 +533,4 @@ if("serviceWorker"in navigator){
 
 populateProblems();
 loadProblem(0);
+setMeasureWidth(measureWidth,false);

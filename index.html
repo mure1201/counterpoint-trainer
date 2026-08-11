@@ -14,7 +14,7 @@
   <div class="title-wrap">
     <div class="title-line">
       <h1>対位法トレーナー</h1>
-      <span class="version-pill">PWA v1.10</span>
+      <span class="version-pill">PWA v1.12</span>
     </div>
     <p>池内式 二声対位法</p>
   </div>
@@ -72,6 +72,16 @@
         <div id="problemCount" class="subtle"></div>
       </div>
 
+      <div class="measure-width-control">
+        <div class="label">小節幅</div>
+        <div class="segmented measure-width-buttons">
+          <button id="measureCompactBtn" class="segment">狭い</button>
+          <button id="measureStandardBtn" class="segment active">標準</button>
+          <button id="measureWideBtn" class="segment">広い</button>
+        </div>
+        <div id="measureWidthValue" class="subtle">150 px / 小節</div>
+      </div>
+
       <div class="tempo-control">
         <div class="label">テンポ</div>
         <div class="tempo-row">
@@ -99,13 +109,13 @@
       <h2 id="cfTitle">定旋律</h2>
       <span class="badge">全音符・固定</span>
     </div>
-    <canvas id="cantusCanvas" aria-label="定旋律"></canvas>
+    <div id="cantusScroll" class="score-scroll"><canvas id="cantusCanvas" aria-label="定旋律"></canvas></div>
 
     <div class="score-title cp-title">
       <h2 id="cpTitle">対旋律</h2>
       <span id="selectedPitch" class="badge">未選択</span>
     </div>
-    <canvas id="counterCanvas" aria-label="対旋律"></canvas>
+    <div id="counterScroll" class="score-scroll editable-scroll"><canvas id="counterCanvas" aria-label="対旋律"></canvas></div>
   </section>
 
   <section class="card input-card">
