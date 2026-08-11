@@ -1,5 +1,5 @@
 
-const APP_VERSION="1.16.0";
+const APP_VERSION="1.17.0";
 const $=id=>document.getElementById(id);
 
 const cfC=$("cantusCanvas"), cpC=$("counterCanvas");
@@ -483,11 +483,51 @@ function drawStaff(ctx,c,notes,slots,type,editable){
   drawClef(ctx);
 
   const m=Math.max(1,Math.floor(notes.length/slots));
-  ctx.save();ctx.globalAlpha=.20;ctx.strokeStyle="#777";
-  for(let i=0;i<=m;i++){
-    const xx=NOTE_LEFT+(w-NOTE_LEFT-RIGHT)*i/m;
-    ctx.beginPath();ctx.moveTo(xx,TOP);ctx.lineTo(xx,TOP+LINE*4);ctx.stroke();
+  const usableW=w-NOTE_LEFT-RIGHT;
+
+  // v1.17 小節番号
+  ctx.save();
+  ctx.fillStyle="#666";
+  ctx.font="11px -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif";
+  ctx.textAlign="left";
+  ctx.textBaseline="bottom";
+  for(let i=0;i<m;i++){
+    const leftX=NOTE_LEFT+usableW*i/m;
+    ctx.fillText(String(i+1),leftX+5,TOP-7);
   }
+  ctx.restore();
+
+  // 1小節目の左側には小節線を引かない。
+  // 内部小節線のみ描く。
+  ctx.save();
+  ctx.strokeStyle="rgba(70,70,70,0.38)";
+  ctx.lineWidth=1;
+  for(let i=1;i<m;i++){
+    const xx=NOTE_LEFT+usableW*i/m;
+    ctx.beginPath();
+    ctx.moveTo(xx,TOP);
+    ctx.lineTo(xx,TOP+LINE*4);
+    ctx.stroke();
+  }
+  ctx.restore();
+
+  // 最終小節の右端に終止線（細線＋太線）
+  const endX=NOTE_LEFT+usableW;
+  ctx.save();
+  ctx.strokeStyle="#111";
+
+  ctx.lineWidth=1.2;
+  ctx.beginPath();
+  ctx.moveTo(endX-5,TOP);
+  ctx.lineTo(endX-5,TOP+LINE*4);
+  ctx.stroke();
+
+  ctx.lineWidth=3.4;
+  ctx.beginPath();
+  ctx.moveTo(endX,TOP);
+  ctx.lineTo(endX,TOP+LINE*4);
+  ctx.stroke();
+
   ctx.restore();
 
   notes.forEach((n,i)=>{
@@ -759,13 +799,54 @@ function verticalInterval(cf,cp){return Math.abs(midi(cp)-midi(cf))%12}
 function motionType(cf1,cp1,cf2,cp2){const a=midi(cf2)-midi(cf1),b=midi(cp2)-midi(cp1);if(a===0&&b===0)return"静止";if(a===0||b===0)return"斜行";return Math.sign(a)!==Math.sign(b)?"反行":"同方向進行"}
 function analyzeContinuity12(){
   const out=[];
-  for(let slot=1;slot<counter.length;slot++){
-    const a=counter[slot-1],b=counter[slot];if(a.empty||b.empty||a.rest||b.rest)continue;
-    const ca=cantus[Math.floor((slot-1)/2)],cb=cantus[Math.floor(slot/2)],i1=verticalInterval(ca,a),i2=verticalInterval(cb,b),mt=motionType(ca,a,cb,b);
-    const l1=((slot-1)%2===0)?"強拍":"弱拍",l2=(slot%2===0)?"強拍":"弱拍",loc=`位置${slot}(${l1}) → ${slot+1}(${l2})`;
-    if(i1===7&&i2===7)out.push(finding(mt==="反行"?"caution":"error","完全5度の連続",loc,`完全5度が連続しています。声部進行は「${mt}」です。`));
-    if(i1===0&&i2===0)out.push(finding(mt==="反行"?"caution":"error","完全8度の連続",loc,`完全8度が連続しています。声部進行は「${mt}」です。`));
+  const maxSlots=Math.min(counter.length,cantus.length*2);
+
+  for(let currentIndex=1;currentIndex<maxSlots;currentIndex++){
+    const previousIndex=currentIndex-1;
+
+    const a=counter[previousIndex];
+    const b=counter[currentIndex];
+    if(!a||!b||a.empty||b.empty||a.rest||b.rest)continue;
+
+    const measureA=Math.floor(previousIndex/2);
+    const measureB=Math.floor(currentIndex/2);
+
+    // 定旋律の実在小節外は絶対に判定しない。
+    if(measureA<0||measureB<0||measureA>=cantus.length||measureB>=cantus.length)continue;
+
+    const ca=cantus[measureA];
+    const cb=cantus[measureB];
+    if(!ca||!cb)continue;
+
+    const i1=verticalInterval(ca,a);
+    const i2=verticalInterval(cb,b);
+    const mt=motionType(ca,a,cb,b);
+
+    const beatA=(previousIndex%2===0)?"強拍":"弱拍";
+    const beatB=(currentIndex%2===0)?"強拍":"弱拍";
+
+    // 「位置7」のような通し番号ではなく、実際の小節番号を表示。
+    const loc=`第${measureA+1}小節・${beatA} → 第${measureB+1}小節・${beatB}`;
+
+    if(i1===7&&i2===7){
+      out.push(finding(
+        mt==="反行"?"caution":"error",
+        "完全5度の連続",
+        loc,
+        `完全5度が連続しています。声部進行は「${mt}」です。`
+      ));
+    }
+
+    if(i1===0&&i2===0){
+      out.push(finding(
+        mt==="反行"?"caution":"error",
+        "完全8度の連続",
+        loc,
+        `完全8度が連続しています。声部進行は「${mt}」です。`
+      ));
+    }
   }
+
   return out;
 }
 function analyze(){
