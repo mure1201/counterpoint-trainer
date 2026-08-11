@@ -3,7 +3,7 @@
 <meta name="theme-color" content="#f7f7f8"><meta name="apple-mobile-web-app-capable" content="yes">
 <link rel="manifest" href="manifest.webmanifest"><link rel="stylesheet" href="style.css"><title>池内式 対位法トレーナー</title>
 </head><body>
-<header><h1>対位法トレーナー</h1><p>池内式 二声対位法・第1類</p></header>
+<header><div><h1>対位法トレーナー</h1><p>池内式 二声対位法・第1類</p></div><button id="updateBtn" class="update" hidden>更新</button></header>
 <main>
 <section class="card"><strong>入力モード</strong>
 <div class="mode-switch"><button id="mode12Btn" class="mode active">全音符：二分音符（1:2）</button><button id="mode11Btn" class="mode">全音符：全音符（1:1）</button></div>
@@ -13,4 +13,6 @@
 <div class="controls"><button id="upBtn">↑ 上げる</button><button id="downBtn">↓ 下げる</button><button id="restBtn">休符</button></div></section>
 <section class="card"><div class="controls"><button id="analyzeBtn" class="primary">この対旋律を添削</button><button id="resetBtn">最初に戻す</button><button id="clearBtn">全音削除</button></div></section>
 <section class="card"><div class="section-title"><h2>添削結果</h2><span id="summaryBadge" class="badge">未判定</span></div><div id="results"><p class="muted">「この対旋律を添削」を押すと結果を表示します。</p></div></section>
+<section class="card"><div class="section-title"><h2>バージョン</h2><span class="badge" id="versionBadge">v0.5</span></div>
+<p class="muted">新しい版が公開された場合は自動更新します。更新待ちのときは右上に「更新」が表示されます。</p></section>
 </main><script src="app.js"></script></body></html>
