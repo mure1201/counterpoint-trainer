@@ -1,5 +1,5 @@
 
-const APP_VERSION="1.21.0";
+const APP_VERSION="1.23.0";
 const $=id=>document.getElementById(id);
 
 const cfC=$("cantusCanvas"), cpC=$("counterCanvas");
@@ -858,39 +858,350 @@ function motionType(cf1,cp1,cf2,cp2){
   if(a===0||b===0)return "斜行";
   return Math.sign(a)!==Math.sign(b)?"反行":"同方向進行";
 }
+
+function semitoneDistance(cf,cp){
+  return Math.abs(midiCounter(cp)-midiCantus(cf));
+}
+function isPerfectOctaveInterval(cf,cp){
+  const d=semitoneDistance(cf,cp);
+  return d>=12 && d%12===0;
+}
+function isPerfectUnisonInterval(cf,cp){
+  return semitoneDistance(cf,cp)===0;
+}
+function isPerfectFifthInterval(cf,cp){
+  return semitoneDistance(cf,cp)%12===7;
+}
+
+
+function direction(a,b){
+  const d=midiBase(b)-midiBase(a);
+  return d===0?0:(d>0?1:-1);
+}
+function sameDirectionMotion(cf1,cp1,cf2,cp2){
+  const a=direction(cf1,cf2);
+  const b=direction(cp1,cp2);
+  return a!==0 && a===b;
+}
+function upperVoiceNotes(cf1,cp1,cf2,cp2){
+  if(cfVoice==="upper") return [cf1,cf2];
+  return [cp1,cp2];
+}
+function isStepwise(a,b){
+  const diatonic=Math.abs(b.step-a.step);
+  const semitones=Math.abs(midiBase(b)-midiBase(a));
+  return diatonic===1 && (semitones===1||semitones===2);
+}
+function perfectClass(cf,cp){
+  const d=semitoneDistance(cf,cp);
+  if(d===0)return "P1";
+  if(d%12===0)return "P8";
+  if(d%12===7)return "P5";
+  return null;
+}
+function genericVerticalClass(cf,cp){
+  return Math.abs(cp.step-cf.step)%7 + 1;
+}
+function melodicIntervalInfo(a,b){
+  const ds=Math.abs(b.step-a.step);
+  const generic=ds+1;
+  const semi=Math.abs(midiBase(b)-midiBase(a));
+  return {generic,semi};
+}
+function allowedMelodicInterval(a,b){
+  const {generic,semi}=melodicIntervalInfo(a,b);
+  if(semi===0)return false; // 同音反復禁止
+  if((generic===2)&&(semi===1||semi===2))return true;
+  if((generic===3)&&(semi===3||semi===4))return true;
+  if(generic===4&&semi===5)return true;
+  if(generic===5&&semi===7)return true;
+  if(generic===6&&semi===8)return true; // 短6度のみ
+  if(generic===8&&semi===12)return true;
+  return false;
+}
+function melodicIntervalLabel(a,b){
+  const {generic,semi}=melodicIntervalInfo(a,b);
+  if(semi===0)return "完全1度（同音反復）";
+  if(generic===6&&semi===9)return "長6度";
+  if(generic===4&&semi===6)return "増4度（三全音）";
+  if(generic===5&&semi===6)return "減5度（三全音）";
+  return `${generic}度（${semi}半音）`;
+}
+function slotLabel(slot){
+  if(mode==="1:1")return `第${slot+1}小節`;
+  const m=Math.floor(slot/2)+1;
+  return `第${m}小節・${slot%2===0?"強拍":"弱拍"}`;
+}
+function cantusForSlot(slot){
+  return mode==="1:1"?cantus[slot]:cantus[Math.floor(slot/2)];
+}
+function soundingCounterSlots(){
+  const max=mode==="1:1"?Math.min(counter.length,cantus.length):Math.min(counter.length,cantus.length*2);
+  const out=[];
+  for(let i=0;i<max;i++){
+    const cp=counter[i];
+    const cf=cantusForSlot(i);
+    if(cf&&cp&&!cp.empty&&!cp.rest)out.push(i);
+  }
+  return out;
+}
+function analyzeDirectPerfects(){
+  const out=[];
+  const slots=soundingCounterSlots();
+  for(let k=1;k<slots.length;k++){
+    const a=slots[k-1],b=slots[k];
+    // 休符や未入力をまたいだ「隣接扱い」はしない
+    if(b!==a+1)continue;
+    const cf1=cantusForSlot(a),cf2=cantusForSlot(b);
+    const cp1=counter[a],cp2=counter[b];
+    if(!sameDirectionMotion(cf1,cp1,cf2,cp2))continue;
+
+    const dest=perfectClass(cf2,cp2);
+    if(!dest)continue;
+
+    // すでに同種完全音程の連続なら parallel 側に任せる
+    const src=perfectClass(cf1,cp1);
+    if(src===dest)continue;
+
+    const name=dest==="P1"?"並達1度":dest==="P5"?"並達5度":"並達8度";
+    out.push(finding(
+      "error",
+      name,
+      `${slotLabel(a)} → ${slotLabel(b)}`,
+      `両声部が同方向に進み、${dest==="P1"?"完全1度":dest==="P5"?"完全5度":"完全8度"}へ到達しています。2声対位法では禁則として扱います。`
+    ));
+  }
+  return out;
+}
+function analyzeMelodicRules(){
+  const out=[];
+  const slots=soundingCounterSlots();
+
+  // 対旋律の隣接音程
+  for(let k=1;k<slots.length;k++){
+    const a=slots[k-1],b=slots[k];
+    if(b!==a+1)continue;
+    const n1=counter[a],n2=counter[b];
+    if(!allowedMelodicInterval(n1,n2)){
+      out.push(finding(
+        "error",
+        "旋律音程の禁則",
+        `${slotLabel(a)} → ${slotLabel(b)}`,
+        `${melodicIntervalLabel(n1,n2)}の進行です。長短2度・3度、完全4度・5度、短6度、完全8度を基本許容音程として判定しています。`
+      ));
+    }
+  }
+
+  // 単方向の旋律区間の端点が増4度（三全音）になるケース
+  for(let start=0;start<slots.length-2;start++){
+    let dir=0;
+    for(let end=start+1;end<slots.length;end++){
+      if(slots[end]!==slots[end-1]+1)break;
+      const d=direction(counter[slots[end-1]],counter[slots[end]]);
+      if(d===0)break;
+      if(dir===0)dir=d;
+      if(d!==dir)break;
+
+      const first=counter[slots[start]],last=counter[slots[end]];
+      const info=melodicIntervalInfo(first,last);
+      if(info.generic===4&&info.semi===6){
+        out.push(finding(
+          "error",
+          "旋律上の三全音",
+          `${slotLabel(slots[start])} → ${slotLabel(slots[end])}`,
+          "一方向に続く旋律の端点が増4度（三全音）になっています。"
+        ));
+        break;
+      }
+    }
+  }
+  return out;
+}
+function analyzeDirectCrossRelation(){
+  const out=[];
+  const slots=soundingCounterSlots();
+  for(let k=1;k<slots.length;k++){
+    const a=slots[k-1],b=slots[k];
+    if(b!==a+1)continue;
+
+    const cf1=cantusForSlot(a),cf2=cantusForSlot(b);
+    const cp1=counter[a],cp2=counter[b];
+
+    // 異なる声部間の連続位置で、同じ音名が半音違いになる「対斜」
+    const pairs=[[cf1,cp2],[cp1,cf2]];
+    for(const [n1,n2] of pairs){
+      const sameLetter=((n1.step%7)+7)%7===((n2.step%7)+7)%7;
+      const semi=Math.abs(midiBase(n2)-midiBase(n1));
+      if(sameLetter&&semi===1){
+        out.push(finding(
+          "error",
+          "対斜",
+          `${slotLabel(a)} → ${slotLabel(b)}`,
+          "異なる声部間で同じ音名の半音違い（増1度関係）が連続して現れています。"
+        ));
+        break;
+      }
+    }
+  }
+  return out;
+}
+function analyzeRepeatedVerticalClass(){
+  const out=[];
+  const slots=soundingCounterSlots();
+  if(!slots.length)return out;
+  let runStart=0;
+  let lastClass=genericVerticalClass(cantusForSlot(slots[0]),counter[slots[0]]);
+  for(let k=1;k<=slots.length;k++){
+    const contiguous=k<slots.length && slots[k]===slots[k-1]+1;
+    const cls=k<slots.length?genericVerticalClass(cantusForSlot(slots[k]),counter[slots[k]]):null;
+    if(!contiguous || cls!==lastClass){
+      const len=k-runStart;
+      if(len>=4){
+        out.push(finding(
+          "caution",
+          "同種音程の連続",
+          `${slotLabel(slots[runStart])} → ${slotLabel(slots[k-1])}`,
+          `${lastClass}度関係が${len}回連続しています。声部の独立性を損なうおそれがあります。`
+        ));
+      }
+      runStart=k;
+      lastClass=cls;
+    }
+  }
+  return out;
+}
+function analyzeSpeciesOneBoundaryRules(){
+  const out=[];
+  if(mode!=="1:1")return out;
+  const slots=soundingCounterSlots();
+  if(!slots.length)return out;
+
+  const first=slots[0],last=slots[slots.length-1];
+  if(first===0){
+    const p=perfectClass(cantus[0],counter[0]);
+    if(!(p==="P1"||p==="P5"||p==="P8")){
+      out.push(finding("error","開始音程",`第1小節`,"第1類の開始は完全1度・完全5度・完全8度（複音程を含む）を基本とします。"));
+    }
+  }
+  if(last===cantus.length-1){
+    const p=perfectClass(cantus[last],counter[last]);
+    if(!(p==="P1"||p==="P8")){
+      out.push(finding("error","終止音程",`第${cantus.length}小節`,"終止は完全1度または完全8度（複音程を含む）にしてください。"));
+    }
+  }
+  return out;
+}
+function analyzeVerticalSpeciesOne(){
+  const out=[];
+  if(mode!=="1:1")return out;
+  for(let i=0;i<Math.min(cantus.length,counter.length);i++){
+    const cp=counter[i];
+    if(!cp||cp.empty||cp.rest)continue;
+    const d=semitoneDistance(cantus[i],cp);
+    const mod=d%12;
+    const consonant=[0,3,4,7,8,9].includes(mod);
+    if(!consonant){
+      out.push(finding("error","不協和音程",`第${i+1}小節`,"第1類では各小節の縦の音程を協和音程にしてください。"));
+    }
+    if(d===0 && i!==0 && i!==cantus.length-1){
+      out.push(finding("error","中間の完全1度",`第${i+1}小節`,"完全1度は第1類では最初と最後のみ可能です。"));
+    }
+  }
+  return out;
+}
+function analyzeContinuity11(){
+  const out=[];
+  const maxMeasures=Math.min(cantus.length,counter.length);
+
+  for(let i=1;i<maxMeasures;i++){
+    const prevCf=cantus[i-1], currCf=cantus[i];
+    const prevCp=counter[i-1], currCp=counter[i];
+    if(!prevCf||!currCf||!prevCp||!currCp)continue;
+    if(prevCp.empty||currCp.empty||prevCp.rest||currCp.rest)continue;
+
+    const mt=motionType(prevCf,prevCp,currCf,currCp);
+    const loc=`第${i}小節 → 第${i+1}小節`;
+    const d1=semitoneDistance(prevCf,prevCp),d2=semitoneDistance(currCf,currCp);
+    const octFamily1=d1%12===0,octFamily2=d2%12===0;
+
+    if(isPerfectFifthInterval(prevCf,prevCp) && isPerfectFifthInterval(currCf,currCp)){
+      out.push(finding("error","連続5度",loc,`完全5度（複音程を含む）が連続しています。声部進行は「${mt}」です。`));
+    }
+
+    // 同度→8度、8度→同度、8度→15度も同一禁則として扱う
+    if(octFamily1&&octFamily2){
+      out.push(finding("error","連続8度・1度",loc,`完全1度／完全8度系の音程が連続しています。声部進行は「${mt}」です。`));
+    }
+  }
+  return out;
+}
+
 function analyzeContinuity12(){
   const out=[];
   const maxSlots=Math.min(counter.length,cantus.length*2);
-  for(let currentIndex=1;currentIndex<maxSlots;currentIndex++){
-    const previousIndex=currentIndex-1;
-    const a=counter[previousIndex],b=counter[currentIndex];
-    if(!a||!b||a.empty||b.empty||a.rest||b.rest)continue;
 
-    const measureA=Math.floor(previousIndex/2);
-    const measureB=Math.floor(currentIndex/2);
-    if(measureA>=cantus.length||measureB>=cantus.length)continue;
-
-    const ca=cantus[measureA],cb=cantus[measureB];
-    const i1=verticalInterval(ca,a),i2=verticalInterval(cb,b);
-    const mt=motionType(ca,a,cb,b);
-    const beatA=(previousIndex%2===0)?"強拍":"弱拍";
-    const beatB=(currentIndex%2===0)?"強拍":"弱拍";
-    const loc=`第${measureA+1}小節・${beatA} → 第${measureB+1}小節・${beatB}`;
-
-    if(i1===7&&i2===7)out.push(finding(mt==="反行"?"caution":"error","完全5度の連続",loc,`完全5度が連続しています。声部進行は「${mt}」です。`));
-    if(i1===0&&i2===0)out.push(finding(mt==="反行"?"caution":"error","完全8度の連続",loc,`完全8度が連続しています。声部進行は「${mt}」です。`));
+  function checkPair(a,b,label){
+    const cp1=counter[a],cp2=counter[b];
+    const cf1=cantusForSlot(a),cf2=cantusForSlot(b);
+    if(!cp1||!cp2||!cf1||!cf2||cp1.empty||cp2.empty||cp1.rest||cp2.rest)return;
+    const mt=motionType(cf1,cp1,cf2,cp2);
+    const d1=semitoneDistance(cf1,cp1),d2=semitoneDistance(cf2,cp2);
+    if(isPerfectFifthInterval(cf1,cp1)&&isPerfectFifthInterval(cf2,cp2)){
+      out.push(finding("error","連続5度",label,`完全5度（複音程を含む）が連続しています。声部進行は「${mt}」です。`));
+    }
+    if(d1%12===0&&d2%12===0){
+      out.push(finding("error","連続8度・1度",label,`完全1度／完全8度系の音程が連続しています。声部進行は「${mt}」です。`));
+    }
   }
+
+  // 実際に連続する音
+  for(let b=1;b<maxSlots;b++){
+    const a=b-1;
+    checkPair(a,b,`${slotLabel(a)} → ${slotLabel(b)}`);
+  }
+
+  // 強拍同士の連続
+  for(let m=1;m<cantus.length;m++){
+    const a=(m-1)*2,b=m*2;
+    if(b<maxSlots)checkPair(a,b,`第${m}小節・強拍 → 第${m+1}小節・強拍`);
+  }
+
+  // 弱拍同士。Phonimの説明に合わせ、両者が協和音程の時のみ5度を含めて検査。
+  for(let m=1;m<cantus.length;m++){
+    const a=(m-1)*2+1,b=m*2+1;
+    if(b>=maxSlots)continue;
+    const cp1=counter[a],cp2=counter[b],cf1=cantusForSlot(a),cf2=cantusForSlot(b);
+    if(!cp1||!cp2||cp1.empty||cp2.empty||cp1.rest||cp2.rest)continue;
+    if(isConsonant(cf1,cp1)&&isConsonant(cf2,cp2)){
+      checkPair(a,b,`第${m}小節・弱拍 → 第${m+1}小節・弱拍`);
+    }
+  }
+
   return out;
 }
 function analyze(){
   const out=[];
+
   if(mode==="1:1"){
     for(let i=0;i<cantus.length;i++){
       const n=counter[i];
       if(!n||n.empty||n.rest)continue;
       const ok=isConsonant(cantus[i],n);
-      out.push(finding(ok?"good":"error","和声音程",`第${i+1}小節`,ok?"基本的な協和音程として扱えます。":"音程を確認してください。"));
+      out.push(finding(
+        ok?"good":"error",
+        "和声音程",
+        `第${i+1}小節`,
+        ok?"基本的な協和音程として扱えます。":"音程を確認してください。"
+      ));
     }
+
+    out.push(...analyzeVerticalSpeciesOne());
+    out.push(...analyzeSpeciesOneBoundaryRules());
+    out.push(...analyzeContinuity11());
+    out.push(...analyzeDirectPerfects());
+    out.push(...analyzeMelodicRules());
+    out.push(...analyzeDirectCrossRelation());
+    out.push(...analyzeRepeatedVerticalClass());
     return out;
   }
 
@@ -899,7 +1210,12 @@ function analyze(){
 
     if(strong&&!strong.empty&&!strong.rest){
       const ok=isConsonant(cf,strong);
-      out.push(finding(ok?"good":"error","強拍の和声音程",`第${m+1}小節・強拍`,ok?"強拍の基本和声音程として扱えます。":"強拍では基本的に協和音程を確認してください。"));
+      out.push(finding(
+        ok?"good":"error",
+        "強拍の和声音程",
+        `第${m+1}小節・強拍`,
+        ok?"強拍の基本和声音程として扱えます。":"強拍では基本的に協和音程を確認してください。"
+      ));
     }
 
     if(!weak||weak.empty||weak.rest)continue;
@@ -919,7 +1235,12 @@ function analyze(){
       }
     }
   }
+
   out.push(...analyzeContinuity12());
+  out.push(...analyzeDirectPerfects());
+  out.push(...analyzeMelodicRules());
+  out.push(...analyzeDirectCrossRelation());
+  out.push(...analyzeRepeatedVerticalClass());
   return out;
 }
 
