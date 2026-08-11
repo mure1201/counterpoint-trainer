@@ -14,7 +14,7 @@
   <div class="title-wrap">
     <div class="title-line">
       <h1>対位法トレーナー</h1>
-      <span class="version-pill">PWA v1.4</span>
+      <span class="version-pill">PWA v1.6</span>
     </div>
     <p>池内式 二声対位法</p>
   </div>
@@ -23,23 +23,53 @@
 
 <main>
   <section class="card control-card">
-    <div class="control-grid">
+    <div class="learning-grid">
       <div>
-        <div class="label">問題</div>
+        <div class="label">定旋律集</div>
+        <select id="collectionSelect">
+          <option value="trainer">対位法トレーナー練習用定旋律</option>
+        </select>
+      </div>
+
+      <div>
+        <div class="label">旋法</div>
+        <select id="modeSelect">
+          <option value="major">長旋法</option>
+          <option value="minor">短旋法</option>
+          <option value="dorian">ドリア旋法</option>
+          <option value="phrygian">フリギア旋法</option>
+          <option value="lydian">リディア旋法</option>
+          <option value="mixolydian">ミクソリディア旋法</option>
+          <option value="aeolian">エオリア旋法</option>
+        </select>
+      </div>
+
+      <div>
+        <div class="label">類</div>
+        <div class="segmented">
+          <button id="mode11Btn" class="segment">第1類（全音符）</button>
+          <button id="mode12Btn" class="segment active">第2類（二分音符）</button>
+        </div>
+      </div>
+
+      <div>
+        <div class="label">定旋律を置く声部</div>
+        <div class="segmented">
+          <button id="cfUpperBtn" class="segment active">上声</button>
+          <button id="cfLowerBtn" class="segment">下声</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="challenge-row">
+      <div class="problem-box">
+        <div class="label">課題</div>
         <div class="problem-nav">
           <button id="prevProblemBtn" aria-label="前の問題">‹</button>
           <select id="problemSelect"></select>
           <button id="nextProblemBtn" aria-label="次の問題">›</button>
         </div>
         <div id="problemCount" class="subtle"></div>
-      </div>
-
-      <div>
-        <div class="label">モード</div>
-        <div class="segmented">
-          <button id="mode11Btn" class="segment">1:1 全音符同士</button>
-          <button id="mode12Btn" class="segment active">1:2 二分音符対全音符</button>
-        </div>
       </div>
 
       <div class="tempo-control">
@@ -50,7 +80,6 @@
           <button id="tempoUpBtn" aria-label="テンポを上げる">＋</button>
           <span id="tempoValue" class="tempo-value">♩=80</span>
         </div>
-        <div class="subtle">二分音符を1拍として再生速度を調整</div>
       </div>
 
       <div class="top-actions">
@@ -62,17 +91,18 @@
         <button id="analyzeBtn" class="tool-btn primary-tool">採点<span>添削</span></button>
       </div>
     </div>
+    <p class="source-note">課題選択の構成は、洗足オンライン「地球の旋律線」の学習フローを参考にした独自実装です。</p>
   </section>
 
   <section class="card score-card">
     <div class="score-title">
-      <h2>定旋律（上声）</h2>
+      <h2 id="cfTitle">定旋律</h2>
       <span class="badge">全音符・固定</span>
     </div>
     <canvas id="cantusCanvas" aria-label="定旋律"></canvas>
 
     <div class="score-title cp-title">
-      <h2 id="cpTitle">対旋律（下声）</h2>
+      <h2 id="cpTitle">対旋律</h2>
       <span id="selectedPitch" class="badge">未選択</span>
     </div>
     <canvas id="counterCanvas" aria-label="対旋律"></canvas>

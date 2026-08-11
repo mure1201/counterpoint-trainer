@@ -1,5 +1,5 @@
 
-const APP_VERSION="1.4.0";
+const APP_VERSION="1.6.0";
 const $=id=>document.getElementById(id);
 
 const cfC=$("cantusCanvas"), cpC=$("counterCanvas");
@@ -10,6 +10,8 @@ const STAFF_LEFT=18, NOTE_LEFT=76, RIGHT=12;
 const C4Y=TOP+LINE*5, LEDGER_HALF=14;
 
 let mode="1:2", selected=null, drag=false;
+let cfVoice="upper";
+let selectedModeName="長旋法";
 let problemIndex=0, cantus=[], counter=[];
 let history=[], future=[];
 let audioCtx=null, activeNodes=[];
@@ -48,8 +50,30 @@ function loadProblem(i){
   selected=null;history=[];future=[];
   $("problemSelect").value=problemIndex;
   $("problemCount").textContent=`${problemIndex+1} / ${PROBLEMS.length}`;
-  clearFeedback();redraw();
+  clearFeedback();updateVoiceLayout();redraw();
 }
+
+function updateVoiceLayout(){
+  const scoreCard=document.querySelector(".score-card");
+  const cfTitle=$("cfTitle");
+  const cpTitle=$("cpTitle");
+  cfTitle.innerHTML=`定旋律 <span class="voice-caption">（${cfVoice==="upper"?"上声":"下声"}）</span>`;
+  cpTitle.innerHTML=`対旋律 <span class="voice-caption">（${cfVoice==="upper"?"下声":"上声"}）</span>`;
+
+  const cfCanvas=$("cantusCanvas");
+  const cpCanvas=$("counterCanvas");
+  const cfHeading=cfCanvas.previousElementSibling;
+  const cpHeading=cpCanvas.previousElementSibling;
+
+  if(cfVoice==="upper"){
+    scoreCard.insertBefore(cfHeading, scoreCard.firstChild);
+    scoreCard.insertBefore(cfCanvas, cpHeading);
+  }else{
+    scoreCard.insertBefore(cpHeading, scoreCard.firstChild);
+    scoreCard.insertBefore(cpCanvas, cfHeading);
+  }
+}
+
 function clearFeedback(){
   $("results").innerHTML='<p class="muted">「採点・添削」を押すと判定結果が表示されます。</p>';
   $("summaryBadge").textContent="未判定";
@@ -74,12 +98,12 @@ function midi(n){return baseMidi(n.step)+n.acc}
 function drawClef(ctx,staffTop=TOP,staffLeft=STAFF_LEFT){
   ctx.save();
   ctx.fillStyle="#111";
-  // v1.3: 五線の上下へ明確にはみ出すサイズへ拡大。
-  // G線を囲むループと中央の交差が五線に重なるよう位置調整。
-  ctx.font="104px 'Times New Roman', Georgia, serif";
+  // v1.5: 五線上端からしっかりはみ出す大きさへ拡大。
+  // 中央の交差とG線ループは五線上に残るよう、少し上へ移動。
+  ctx.font="116px 'Times New Roman', Georgia, serif";
   ctx.textAlign="center";
   ctx.textBaseline="middle";
-  ctx.fillText("𝄞",47,staffTop+LINE*2.08);
+  ctx.fillText("𝄞",49,staffTop+LINE*1.88);
   ctx.restore();
 }
 
@@ -90,10 +114,10 @@ function openHead(ctx,px,py,kind){
   ctx.translate(px,py);
   ctx.rotate(-0.30);
 
-  // v1.3: 黒線が太く見え過ぎないよう、内側の白抜きをさらに広げる。
-  // 全音符・二分音符で対角方向の太さの違いは明確に残す。
+  // v1.5: 玉の黒線を一段細くし、出版譜に近い抜け感へ。
+  // 対角方向の太さの違いは維持する。
   const outerW = kind==="whole" ? 10.0 : 9.7;
-  const outerH = kind==="whole" ? 6.25 : 6.05;
+  const outerH = kind==="whole" ? 6.20 : 6.00;
 
   ctx.fillStyle="#111";
   ctx.beginPath();
@@ -102,10 +126,10 @@ function openHead(ctx,px,py,kind){
 
   // 全音符：右上・左下が太い
   // 二分音符：左上・右下が太い
-  const sx = kind==="whole" ? -1.40 : 1.35;
-  const sy = kind==="whole" ? -0.82 : 0.80;
-  const holeW = kind==="whole" ? 7.15 : 6.95;
-  const holeH = kind==="whole" ? 4.02 : 3.88;
+  const sx = kind==="whole" ? -1.48 : 1.42;
+  const sy = kind==="whole" ? -0.86 : 0.84;
+  const holeW = kind==="whole" ? 7.35 : 7.13;
+  const holeH = kind==="whole" ? 4.16 : 4.00;
 
   ctx.fillStyle="#fff";
   ctx.beginPath();
@@ -232,12 +256,28 @@ function setMode(m){
   mode=m;
   $("mode12Btn").classList.toggle("active",m==="1:2");
   $("mode11Btn").classList.toggle("active",m==="1:1");
-  $("modeHelp").textContent=m==="1:2"?"定旋律は全音符、対旋律は二分音符で入力します。":"定旋律・対旋律とも全音符で、1対1として入力します。";
-  $("inputTitle").textContent=m==="1:2"?"音の入力（対旋律・二分音符）":"音の入力（対旋律・全音符）";
+  $("inputTitle").textContent=m==="1:2"?"音の入力（第2類・二分音符）":"音の入力（第1類・全音符）";
   $("restBtn").textContent=m==="1:2"?"𝄽 二分休符":"𝄻 全休符";
   loadProblem(problemIndex);
 }
 $("mode12Btn").onclick=()=>setMode("1:2");$("mode11Btn").onclick=()=>setMode("1:1");
+$("cfUpperBtn").onclick=()=>{
+  cfVoice="upper";
+  $("cfUpperBtn").classList.add("active");
+  $("cfLowerBtn").classList.remove("active");
+  updateVoiceLayout();redraw();
+};
+$("cfLowerBtn").onclick=()=>{
+  cfVoice="lower";
+  $("cfLowerBtn").classList.add("active");
+  $("cfUpperBtn").classList.remove("active");
+  updateVoiceLayout();redraw();
+};
+$("modeSelect").onchange=e=>{
+  selectedModeName=e.target.options[e.target.selectedIndex].text;
+  clearFeedback();
+};
+
 $("problemSelect").onchange=e=>loadProblem(Number(e.target.value));
 $("prevProblemBtn").onclick=()=>loadProblem(problemIndex-1);
 $("nextProblemBtn").onclick=()=>loadProblem(problemIndex+1);
@@ -255,21 +295,23 @@ function scheduleTone(n,start,dur,gainValue=.08,type="sine"){
   o.connect(g).connect(ac.destination);o.start(start);o.stop(start+dur+.02);activeNodes.push(o);
 }
 function halfBeatSeconds(){return 60/tempoBpm}
+function wholeNoteSeconds(){return halfBeatSeconds()*2}
 function playCantus(){
   stopPlayback();
-  const ac=ensureAudio(),u=halfBeatSeconds(),s=ac.currentTime+.05;
-  cantus.forEach((n,i)=>scheduleTone(n,s+i*u*2,u*1.90,.09,"sine"));
+  const ac=ensureAudio(),whole=wholeNoteSeconds(),s=ac.currentTime+.05;
+  cantus.forEach((n,i)=>scheduleTone(n,s+i*whole,whole*.95,.09,"sine"));
 }
 function playBoth(){
   stopPlayback();
-  const ac=ensureAudio(),u=halfBeatSeconds(),s=ac.currentTime+.05;
+  const ac=ensureAudio(),half=halfBeatSeconds(),whole=wholeNoteSeconds(),s=ac.currentTime+.05;
   if(mode==="1:2"){
-    cantus.forEach((n,i)=>scheduleTone(n,s+i*u*2,u*1.90,.065,"sine"));
-    counter.forEach((n,i)=>scheduleTone(n,s+i*u,u*.92,.065,"triangle"));
+    // 定旋律＝全音符、対旋律＝二分音符2個
+    cantus.forEach((n,i)=>scheduleTone(n,s+i*whole,whole*.95,.065,cfVoice==="upper"?"triangle":"sine"));
+    counter.forEach((n,i)=>scheduleTone(n,s+i*half,half*.92,.065,cfVoice==="upper"?"sine":"triangle"));
   }else{
-    // 1:1では全音符同士。1音を二分音符2拍分として再生。
-    cantus.forEach((n,i)=>scheduleTone(n,s+i*u*2,u*1.90,.065,"sine"));
-    counter.forEach((n,i)=>scheduleTone(n,s+i*u*2,u*1.90,.065,"triangle"));
+    // v1.5: 1:1は両声とも全音符。同一の開始間隔・同一の音価で再生。
+    cantus.forEach((n,i)=>scheduleTone(n,s+i*whole,whole*.95,.065,cfVoice==="upper"?"triangle":"sine"));
+    counter.forEach((n,i)=>scheduleTone(n,s+i*whole,whole*.95,.065,cfVoice==="upper"?"sine":"triangle"));
   }
 }
 $("playCantusBtn").onclick=playCantus;$("playBothBtn").onclick=playBoth;$("stopBtn").onclick=stopPlayback;
@@ -305,6 +347,7 @@ function analyzeContinuity12(){
   return out;
 }
 function analyze(){
+  const className=mode==="1:2"?"第2類":"第1類";
   const out=[];
   if(mode==="1:1"){
     counter.forEach((n,i)=>{if(n.rest)return;out.push(finding(isConsonant(cantus[i],n)?"good":"error","和声音程",`第${i+1}小節`,isConsonant(cantus[i],n)?"基本的な協和音程として扱えます。":"音程を確認してください。"))});
