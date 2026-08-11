@@ -1,5 +1,5 @@
 
-const APP_VERSION="1.18.0";
+const APP_VERSION="1.19.0";
 const $=id=>document.getElementById(id);
 
 const cfC=$("cantusCanvas"), cpC=$("counterCanvas");
@@ -12,11 +12,6 @@ let measureWidth=150; // v1.12: 110 / 150 / 200 px から選択
 
 let mode="1:2", selected=null, drag=false;
 let cfVoice="upper";
-const VOICE_SHIFT=7; // 1オクターブ相当のダイアトニック段差
-function counterpointRegisterShift(){
-  // 定旋律が上声なら対旋律は下声へ。定旋律が下声なら対旋律は上声へ。
-  return cfVoice==="upper" ? -VOICE_SHIFT : VOICE_SHIFT;
-}
 let selectedModeName="長旋法";
 let problemIndex=0, cantus=[], counter=[];
 let history=[], future=[];
@@ -244,7 +239,7 @@ function loadProblem(i){
   cantus=list[problemIndex].steps.map(s=>noteObj(s));
 
   const slots=mode==="1:2"?cantus.length*2:cantus.length;
-  counter=Array.from({length:slots},()=>noteObj(4+counterpointRegisterShift(),0,false,true));
+  counter=Array.from({length:slots},()=>noteObj(4,0,false,true));
 
   selected=null;history=[];future=[];
   populateProblems();
@@ -312,17 +307,21 @@ function resize(c){
 }
 function y(step){return C4Y-step*(LINE/2)}
 function stepFromY(v){return Math.max(-8,Math.min(22,Math.round((C4Y-v)/(LINE/2))))}
-function x(i,n,w){
-  return NOTE_LEFT+(w-NOTE_LEFT-RIGHT)*(i+.5)/n;
-}
+function x(i,n,w){return NOTE_LEFT+(w-NOTE_LEFT-RIGHT)*(i+.5)/n}
+function idx(px,n,w){return Math.max(0,Math.min(n-1,Math.floor(((px-NOTE_LEFT)/(w-NOTE_LEFT-RIGHT))*n)))}
+function baseName(step){const N=["C","D","E","F","G","A","B"],o=Math.floor(step/7),i=((step%7)+7)%7;return {letter:N[i],octave:4+o}}
+function noteNameObj(n){const b=baseName(n.step),a=n.acc===1?"♯":n.acc===-1?"♭":"";return `${b.letter}${a}${b.octave}`}
+function baseMidi(step){const B=[60,62,64,65,67,69,71],o=Math.floor(step/7),i=((step%7)+7)%7;return B[i]+o*12}
+function midiBase(n){return baseMidi(n.step)+n.acc}
+function voiceOctaveSemitones(voice){return voice==="upper"?12:0}
+function cfVoiceName(){return cfVoice==="upper"?"upper":"lower"}
+function cpVoiceName(){return cfVoice==="upper"?"lower":"upper"}
+function midiCantus(n){return midiBase(n)+voiceOctaveSemitones(cfVoiceName())}
+function midiCounter(n){return midiBase(n)+voiceOctaveSemitones(cpVoiceName())}
 function noteX(i,n,w,type){
-  const base=x(i,n,w);
-  if(type==="whole"){
-    // v1.18: 全音符は小節中央ではなく左寄り（小節幅の約32%地点）
-    const slotW=(w-NOTE_LEFT-RIGHT)/n;
-    return NOTE_LEFT+slotW*i+slotW*0.32;
-  }
-  return base;
+  if(type!=="whole")return x(i,n,w);
+  const slotW=(w-NOTE_LEFT-RIGHT)/n;
+  return NOTE_LEFT+slotW*i+slotW*0.32;
 }
 
 // 可変太さの白抜き音符頭。
@@ -552,40 +551,45 @@ function redraw(){
     resize(cfC);
     resize(cpC);
 
+    const fallbackStaff=(ctx,c)=>{
+      const w=c.clientWidth||Number(c.dataset.logicalWidth)||600;
+      ctx.clearRect(0,0,w,220);
+      ctx.strokeStyle="#111";
+      ctx.lineWidth=1;
+      for(let i=0;i<5;i++){
+        const yy=TOP+i*LINE;
+        ctx.beginPath();
+        ctx.moveTo(STAFF_LEFT,yy);
+        ctx.lineTo(w-RIGHT,yy);
+        ctx.stroke();
+      }
+      try{drawClef(ctx)}catch(e){}
+    };
+
     try{
       drawStaff(cfX,cfC,cantus,1,"whole",false);
     }catch(err){
       console.error("cantus draw error",err);
+      fallbackStaff(cfX,cfC);
     }
 
     try{
       drawStaff(cpX,cpC,counter,mode==="1:2"?2:1,mode==="1:2"?"half":"whole",true);
     }catch(err){
       console.error("counterpoint draw error",err);
-      // Fallback: at least redraw the five staff lines so the entry area never disappears.
-      const w=cpC.clientWidth;
-      cpX.clearRect(0,0,w,220);
-      cpX.strokeStyle="#111";
-      cpX.lineWidth=1;
-      for(let i=0;i<5;i++){
-        const yy=TOP+i*LINE;
-        cpX.beginPath();
-        cpX.moveTo(STAFF_LEFT,yy);
-        cpX.lineTo(w-RIGHT,yy);
-        cpX.stroke();
-      }
-      drawClef(cpX);
+      fallbackStaff(cpX,cpC);
     }
 
     $("cantusScroll").style.display="block";
     $("counterScroll").style.display="block";
+    $("cantusCanvas").style.visibility="visible";
     $("counterCanvas").style.visibility="visible";
 
     $("selectedPitch").textContent=
       selected==null?"未選択":
-      counter[selected].empty?"未入力":
-      counter[selected].rest?"休符":
-      noteNameObj(counter[selected]);
+      counter[selected]?.empty?"未入力":
+      counter[selected]?.rest?"休符":
+      counter[selected]?noteNameObj(counter[selected]):"未選択";
   });
 }
 
@@ -690,23 +694,19 @@ $("undoBtn").onclick=undo;$("redoBtn").onclick=redo;
 
 function buildPitchButtons(){
   const wrap=$("pitchButtons");
+  if(!wrap)return;
   wrap.innerHTML="";
 
-  // 下声ならC3〜、上声ならC4〜を基本レンジにする。
-  const shift=counterpointRegisterShift();
-  const start = cfVoice==="upper" ? -7 : 0; // CF上声→対旋律下声 = C3基準
   const steps=[];
-  for(let s=start;s<=start+11;s++)steps.push(s);
+  for(let s=0;s<=11;s++)steps.push(s);
 
   steps.forEach(s=>{
-    const n=noteObj(s);
+    const bObj=baseName(s);
+    const octaveOffset=cpVoiceName()==="upper"?1:0;
     const b=document.createElement("button");
-    b.textContent=noteNameObj(n);
+    b.textContent=`${bObj.letter}${bObj.octave+octaveOffset}`;
     b.onclick=()=>applyEdit(x=>{
-      x.step=s;
-      x.acc=0;
-      x.rest=false;
-      x.empty=false;
+      x.step=s;x.acc=0;x.rest=false;x.empty=false;
     });
     wrap.appendChild(b);
   });
@@ -756,19 +756,24 @@ $("clearBtn").onclick=()=>{pushHistory();counter.forEach(n=>{n.empty=true;n.rest
 // --- audio ---
 function ensureAudio(){if(!audioCtx)audioCtx=new (window.AudioContext||window.webkitAudioContext)();if(audioCtx.state==="suspended")audioCtx.resume();return audioCtx}
 function stopPlayback(){activeNodes.forEach(n=>{try{n.stop()}catch{}});activeNodes=[]}
-function scheduleTone(n,start,dur,gainValue=.08,type="sine"){
-  if(!n||n.empty||n.rest)return;const ac=ensureAudio(),o=ac.createOscillator(),g=ac.createGain();
-  o.type=type;o.frequency.value=440*Math.pow(2,(midi(n)-69)/12);
-  g.gain.setValueAtTime(.0001,start);g.gain.exponentialRampToValueAtTime(gainValue,start+.015);
-  g.gain.setValueAtTime(gainValue,Math.max(start+.02,start+dur-.04));g.gain.exponentialRampToValueAtTime(.0001,start+dur);
-  o.connect(g).connect(ac.destination);o.start(start);o.stop(start+dur+.02);activeNodes.push(o);
+function scheduleTone(n,start,dur,gainValue=.08,type="sine",role="counter"){
+  if(!n||n.empty||n.rest)return;
+  const ac=ensureAudio(),o=ac.createOscillator(),g=ac.createGain();
+  const pitch=role==="cantus"?midiCantus(n):midiCounter(n);
+  o.type=type;o.frequency.value=440*Math.pow(2,(pitch-69)/12);
+  g.gain.setValueAtTime(.0001,start);
+  g.gain.exponentialRampToValueAtTime(gainValue,start+.015);
+  g.gain.setValueAtTime(gainValue,Math.max(start+.02,start+dur-.04));
+  g.gain.exponentialRampToValueAtTime(.0001,start+dur);
+  o.connect(g).connect(ac.destination);
+  o.start(start);o.stop(start+dur+.02);activeNodes.push(o);
 }
 function halfBeatSeconds(){return 60/tempoBpm}
 function wholeNoteSeconds(){return halfBeatSeconds()*2}
 function playCantus(){
   stopPlayback();
   const ac=ensureAudio(),whole=wholeNoteSeconds(),s=ac.currentTime+.05;
-  cantus.forEach((n,i)=>scheduleTone(n,s+i*whole,whole*.95,.09,"sine"));
+  cantus.forEach((n,i)=>scheduleTone(n,s+i*whole,whole*.95,.09,"sine","cantus"));
 }
 function playBoth(){
   stopPlayback();
@@ -796,100 +801,15 @@ $("tempoUpBtn").onclick=()=>setTempo(tempoBpm+4);
 setTempo(80);
 
 // --- analysis ---
-function isConsonant(cf,cp){const s=Math.abs(midi(cp)-midi(cf))%12;return [0,3,4,7,8,9].includes(s)}
-function melodicStep(a,b){return Math.abs(b.step-a.step)===1}
-function sameDirection(a,b,c){const d1=Math.sign(b.step-a.step),d2=Math.sign(c.step-b.step);return d1!==0&&d1===d2}
-function passingShape(a,b,c){return melodicStep(a,b)&&melodicStep(b,c)&&sameDirection(a,b,c)}
-function neighborShape(a,b,c){return melodicStep(a,b)&&melodicStep(b,c)&&a.step===c.step}
-function finding(sev,title,loc,msg){return {sev,title,loc,msg}}
-function verticalInterval(cf,cp){return Math.abs(midi(cp)-midi(cf))%12}
-function motionType(cf1,cp1,cf2,cp2){const a=midi(cf2)-midi(cf1),b=midi(cp2)-midi(cp1);if(a===0&&b===0)return"静止";if(a===0||b===0)return"斜行";return Math.sign(a)!==Math.sign(b)?"反行":"同方向進行"}
-function analyzeContinuity12(){
-  const out=[];
-  const maxSlots=Math.min(counter.length,cantus.length*2);
-
-  for(let currentIndex=1;currentIndex<maxSlots;currentIndex++){
-    const previousIndex=currentIndex-1;
-
-    const a=counter[previousIndex];
-    const b=counter[currentIndex];
-    if(!a||!b||a.empty||b.empty||a.rest||b.rest)continue;
-
-    const measureA=Math.floor(previousIndex/2);
-    const measureB=Math.floor(currentIndex/2);
-
-    // 定旋律の実在小節外は絶対に判定しない。
-    if(measureA<0||measureB<0||measureA>=cantus.length||measureB>=cantus.length)continue;
-
-    const ca=cantus[measureA];
-    const cb=cantus[measureB];
-    if(!ca||!cb)continue;
-
-    const i1=verticalInterval(ca,a);
-    const i2=verticalInterval(cb,b);
-    const mt=motionType(ca,a,cb,b);
-
-    const beatA=(previousIndex%2===0)?"強拍":"弱拍";
-    const beatB=(currentIndex%2===0)?"強拍":"弱拍";
-
-    // 「位置7」のような通し番号ではなく、実際の小節番号を表示。
-    const loc=`第${measureA+1}小節・${beatA} → 第${measureB+1}小節・${beatB}`;
-
-    if(i1===7&&i2===7){
-      out.push(finding(
-        mt==="反行"?"caution":"error",
-        "完全5度の連続",
-        loc,
-        `完全5度が連続しています。声部進行は「${mt}」です。`
-      ));
-    }
-
-    if(i1===0&&i2===0){
-      out.push(finding(
-        mt==="反行"?"caution":"error",
-        "完全8度の連続",
-        loc,
-        `完全8度が連続しています。声部進行は「${mt}」です。`
-      ));
-    }
-  }
-
-  return out;
-}
-function analyze(){
-  const className=mode==="1:2"?"第2類":"第1類";
-  const out=[];
-  if(mode==="1:1"){
-    counter.forEach((n,i)=>{if(n.empty||n.rest)return;out.push(finding(isConsonant(cantus[i],n)?"good":"error","和声音程",`第${i+1}小節`,isConsonant(cantus[i],n)?"基本的な協和音程として扱えます。":"音程を確認してください。"))});
-    return out;
-  }
-  for(let m=0;m<cantus.length;m++){
-    const cf=cantus[m],strong=counter[m*2],weak=counter[m*2+1];
-    if(strong&&!strong.empty&&!strong.rest)out.push(finding(isConsonant(cf,strong)?"good":"error","強拍の和声音程",`第${m+1}小節・強拍`,isConsonant(cf,strong)?"強拍の基本和声音程として扱えます。":"強拍では基本的に協和音程を確認してください。"));
-    if(!weak||weak.empty||weak.rest)continue;
-    if(isConsonant(cf,weak))out.push(finding("good","弱拍の協和音程",`第${m+1}小節・弱拍`,"弱拍は協和音程として扱えます。"));
-    else{
-      const prev=strong,next=(m+1<cantus.length)?counter[(m+1)*2]:null;
-      if(!prev||prev.empty||prev.rest||!next||next.empty||next.rest)out.push(finding("info","弱拍の不協和音程",`第${m+1}小節・弱拍`,"前後音が不足しているため自動判定を保留します。"));
-      else if(passingShape(prev,weak,next))out.push(finding("good","弱拍の経過音",`第${m+1}小節・弱拍`,"順次進行による経過音候補として成立しています。"));
-      else if(neighborShape(prev,weak,next))out.push(finding("good","弱拍の刺繍音",`第${m+1}小節・弱拍`,"刺繍音候補として成立しています。"));
-      else out.push(finding("error","弱拍の不協和音程",`第${m+1}小節・弱拍`,"経過音または刺繍音としての条件を満たしていません。"));
-    }
-  }
-  out.push(...analyzeContinuity12());return out;
-}
+function isConsonant(cf,cp){const s=Math.abs(midiCounter(cp)-midiCantus(cf))%12;return [0,3,4,7,8,9].includes(s)}
 $("analyzeBtn").onclick=()=>{
   const a=analyze(),r=$("results");r.innerHTML="";
   if(!a.length){r.innerHTML='<p class="muted">判定対象がありません。</p>';$("summaryBadge").textContent="未入力";return}
   a.forEach(v=>{const d=document.createElement("div");d.className=`result ${v.sev}`;d.innerHTML=`<b>${v.title}</b><div class="loc">${v.loc}</div><div>${v.msg}</div>`;r.appendChild(d)});
   const e=a.filter(v=>v.sev==="error").length,c=a.filter(v=>v.sev==="caution").length;
   $("summaryBadge").textContent=e?`要修正 ${e}件`:c?`注意 ${c}件`:"適切";
-  // v1.18: 採点後、添削結果まで自動スクロール
   requestAnimationFrame(()=>{
-    document.querySelector(".feedback-card")?.scrollIntoView({
-      behavior:"smooth",
-      block:"start"
-    });
+    document.querySelector(".feedback-card")?.scrollIntoView({behavior:"smooth",block:"start"});
   });
 };
 
@@ -934,10 +854,7 @@ let syncingScroll=false;
 function syncBothScores(source,target){
   if(syncingScroll)return;
   syncingScroll=true;
-
-  // Both canvases use the same measure count and width, so mirror scrollLeft directly.
   target.scrollLeft=source.scrollLeft;
-
   requestAnimationFrame(()=>{syncingScroll=false});
 }
 $("cantusScroll").addEventListener("scroll",()=>syncBothScores($("cantusScroll"),$("counterScroll")),{passive:true});
