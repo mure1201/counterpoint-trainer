@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+  <meta name="theme-color" content="#f7f7f8">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="対位法">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="apple-touch-icon" href="icon-192.svg">
+  <link rel="stylesheet" href="style.css">
+  <title>池内式 対位法トレーナー</title>
+</head>
+<body>
+  <header>
+    <div>
+      <h1>対位法トレーナー</h1>
+      <p>池内式 二声対位法・第1類 試作</p>
+    </div>
+    <button id="installBtn" class="secondary" hidden>インストール</button>
+  </header>
+
+  <main>
+    <section class="card intro">
+      <strong>操作</strong>
+      <p>対旋律の五線譜をタップして音符を置きます。入力済みの音符は上下にドラッグして音高を変更できます。</p>
+    </section>
+
+    <section class="card">
+      <div class="section-title">
+        <h2>定旋律</h2>
+        <span class="badge">固定</span>
+      </div>
+      <canvas id="cantusCanvas"></canvas>
+    </section>
+
+    <section class="card">
+      <div class="section-title">
+        <h2>対旋律</h2>
+        <span id="selectedPitch" class="badge">未選択</span>
+      </div>
+      <canvas id="counterCanvas"></canvas>
+
+      <div class="controls small-gap">
+        <button id="upBtn">↑ 上げる</button>
+        <button id="downBtn">↓ 下げる</button>
+        <button id="restBtn" class="secondary">休符</button>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="controls">
+        <button id="analyzeBtn" class="primary">この対旋律を添削</button>
+        <button id="resetBtn" class="secondary">最初に戻す</button>
+        <button id="clearBtn" class="secondary">全音削除</button>
+      </div>
+    </section>
+
+    <section class="card">
+      <div class="section-title">
+        <h2>添削結果</h2>
+        <span id="summaryBadge" class="badge">未判定</span>
+      </div>
+      <div id="results" class="results">
+        <p class="muted">「この対旋律を添削」を押すと結果を表示します。</p>
+      </div>
+    </section>
+
+    <section class="card install-help">
+      <h2>iPhoneのホーム画面に追加</h2>
+      <p>Safariで公開URLを開き、共有ボタン →「ホーム画面に追加」を選びます。</p>
+    </section>
+  </main>
+
+  <footer>
+    <small>試作版 v0.1 — 判定規則は今後、教本の譜例に合わせて拡張します。</small>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>
