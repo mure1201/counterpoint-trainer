@@ -1,5 +1,5 @@
 
-const APP_VERSION="1.19.0";
+const APP_VERSION="1.20.0";
 const $=id=>document.getElementById(id);
 
 const cfC=$("cantusCanvas"), cpC=$("counterCanvas");
@@ -324,6 +324,22 @@ function noteX(i,n,w,type){
   return NOTE_LEFT+slotW*i+slotW*0.32;
 }
 
+// ト音記号
+function drawClef(ctx,staffTop=TOP,staffLeft=STAFF_LEFT){
+  ctx.save();
+  ctx.fillStyle="#111";
+
+  // v1.20:
+  // v1.8以降の調整を復元。
+  // 五線の上下にはみ出し、主要交差が五線上に来る大きさと位置。
+  ctx.font="140px 'Times New Roman', Georgia, serif";
+  ctx.textAlign="center";
+  ctx.textBaseline="middle";
+  ctx.fillText("𝄞",52,staffTop+LINE*1.68);
+
+  ctx.restore();
+}
+
 // 可変太さの白抜き音符頭。
 // innerShift の方向で「どちらの対角が太いか」を作る。
 function openHead(ctx,px,py,kind){
@@ -458,6 +474,9 @@ function pointInEditableZone(p,canvasWidth){
 }
 
 function drawStaff(ctx,c,notes,slots,type,editable){
+  if(typeof drawClef!=="function"){
+    console.error("drawClef is not defined");
+  }
   const w=c.clientWidth,h=c.clientHeight;ctx.clearRect(0,0,w,h);
   ctx.strokeStyle="#111";ctx.fillStyle="#111";ctx.lineWidth=1;
 
@@ -472,7 +491,11 @@ function drawStaff(ctx,c,notes,slots,type,editable){
   for(let i=0;i<5;i++){
     const yy=TOP+i*LINE;ctx.beginPath();ctx.moveTo(STAFF_LEFT,yy);ctx.lineTo(w-RIGHT,yy);ctx.stroke();
   }
-  drawClef(ctx);
+  try{
+    drawClef(ctx);
+  }catch(err){
+    console.error("clef draw error",err);
+  }
 
   const m=Math.max(1,Math.floor(notes.length/slots));
   const usableW=w-NOTE_LEFT-RIGHT;
@@ -584,6 +607,12 @@ function redraw(){
     $("counterScroll").style.display="block";
     $("cantusCanvas").style.visibility="visible";
     $("counterCanvas").style.visibility="visible";
+
+    // v1.20 final visibility pass
+    cfC.style.visibility="visible";
+    cpC.style.visibility="visible";
+    cfC.style.display="block";
+    cpC.style.display="block";
 
     $("selectedPitch").textContent=
       selected==null?"未選択":
