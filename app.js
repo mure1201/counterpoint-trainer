@@ -1,5 +1,5 @@
 
-const APP_VERSION="1.8.0";
+const APP_VERSION="1.9.0";
 const $=id=>document.getElementById(id);
 
 const cfC=$("cantusCanvas"), cpC=$("counterCanvas");
@@ -118,94 +118,35 @@ function openHead(ctx,px,py,kind){
   ctx.translate(px,py);
   ctx.rotate(-0.30);
 
-  const rx = kind==="whole" ? 10.0 : 9.7;
-  const ry = kind==="whole" ? 6.15 : 5.95;
+  // v1.9:
+  // 外周は固定したまま、白抜き部分を少し偏心させて
+  // 「内側だけ」厚みが変わる伝統的な音符頭へ。
+  // 太い部分と細い部分は楕円同士の連続曲線なので滑らかにつながる。
+  const rx = kind==="whole" ? 10.3 : 10.0;
+  const ry = kind==="whole" ? 6.35 : 6.10;
 
-  // 基本の外輪郭は細く均一。
-  ctx.fillStyle="#fff";
-  ctx.beginPath();
-  ctx.ellipse(0,0,rx-0.15,ry-0.15,0,0,Math.PI*2);
-  ctx.fill();
-
-  ctx.strokeStyle="#111";
-  ctx.lineWidth=1.45;
-  ctx.lineCap="round";
-  ctx.lineJoin="round";
+  // 外側の黒い輪郭
+  ctx.fillStyle="#111";
   ctx.beginPath();
   ctx.ellipse(0,0,rx,ry,0,0,Math.PI*2);
-  ctx.stroke();
+  ctx.fill();
 
-  // 太い箇所は「外側へ膨らませず」、内側へ厚みを足す。
-  // ベジェ曲線でなだらかに広がって戻る形にし、
-  // 細い部分との境界を滑らかにつなぐ。
-  function innerThickArc(centerAngle, span, depth){
-    const a1=centerAngle-span;
-    const a2=centerAngle+span;
+  // 白抜き。
+  // 全音符：右上・左下が太くなるよう左上寄りへ。
+  // 二分音符：左上・右下が太くなるよう右下寄りへ。
+  const dx = kind==="whole" ? -1.35 : 1.25;
+  const dy = kind==="whole" ? -0.80 : 0.78;
+  const holeRx = kind==="whole" ? 6.80 : 6.55;
+  const holeRy = kind==="whole" ? 3.72 : 3.58;
 
-    const p1={x:rx*Math.cos(a1), y:ry*Math.sin(a1)};
-    const p2={x:rx*Math.cos(a2), y:ry*Math.sin(a2)};
+  ctx.fillStyle="#fff";
+  ctx.beginPath();
+  ctx.ellipse(dx,dy,holeRx,holeRy,0,0,Math.PI*2);
+  ctx.fill();
 
-    const irx=rx-depth;
-    const iry=ry-depth*0.72;
-    const q2={x:irx*Math.cos(a2), y:iry*Math.sin(a2)};
-    const q1={x:irx*Math.cos(a1), y:iry*Math.sin(a1)};
-
-    const c1a=centerAngle-span*0.35;
-    const c2a=centerAngle+span*0.35;
-
-    ctx.fillStyle="#111";
-    ctx.beginPath();
-    ctx.moveTo(p1.x,p1.y);
-
-    // 外側輪郭に沿う
-    ctx.bezierCurveTo(
-      rx*Math.cos(c1a), ry*Math.sin(c1a),
-      rx*Math.cos(c2a), ry*Math.sin(c2a),
-      p2.x,p2.y
-    );
-
-    // 内側へ滑らかに入る
-    ctx.bezierCurveTo(
-      (rx-depth*0.35)*Math.cos(a2),
-      (ry-depth*0.28)*Math.sin(a2),
-      (rx-depth*0.75)*Math.cos(a2),
-      (ry-depth*0.55)*Math.sin(a2),
-      q2.x,q2.y
-    );
-
-    // 内側の輪郭に沿って戻る
-    ctx.bezierCurveTo(
-      irx*Math.cos(c2a), iry*Math.sin(c2a),
-      irx*Math.cos(c1a), iry*Math.sin(c1a),
-      q1.x,q1.y
-    );
-
-    // 外側へなだらかに戻る
-    ctx.bezierCurveTo(
-      (rx-depth*0.75)*Math.cos(a1),
-      (ry-depth*0.55)*Math.sin(a1),
-      (rx-depth*0.35)*Math.cos(a1),
-      (ry-depth*0.28)*Math.sin(a1),
-      p1.x,p1.y
-    );
-
-    ctx.closePath();
-    ctx.fill();
-  }
-
-  if(kind==="whole"){
-    // 全音符：右上・左下の内側のみ厚くする
-    innerThickArc(Math.PI*7/4,0.62,2.55);
-    innerThickArc(Math.PI*3/4,0.62,2.55);
-  }else{
-    // 二分音符：左上・右下の内側のみ厚くする
-    innerThickArc(Math.PI*5/4,0.58,2.45);
-    innerThickArc(Math.PI/4,0.58,2.45);
-  }
-
-  // 最後に細い外輪郭をもう一度描き、外周は均一な細さに保つ。
+  // 外周だけごく細く締める
   ctx.strokeStyle="#111";
-  ctx.lineWidth=1.35;
+  ctx.lineWidth=0.65;
   ctx.beginPath();
   ctx.ellipse(0,0,rx,ry,0,0,Math.PI*2);
   ctx.stroke();
@@ -248,6 +189,44 @@ function lineThroughHead(ctx,px,step){
   ctx.save();ctx.strokeStyle="#111";ctx.lineWidth=isLedger?1.3:1;
   ctx.beginPath();ctx.moveTo(px-(isLedger?LEDGER_HALF:10.8),py);ctx.lineTo(px+(isLedger?LEDGER_HALF:10.8),py);ctx.stroke();ctx.restore();
 }
+
+function operationZoneForNote(n,xx,type){
+  const centerY = n.rest ? TOP+LINE*2.35 : y(n.step);
+  // 音符頭のまわりだけを操作可能にする。
+  // 休符は中央付近の小さな範囲。
+  return {
+    x:xx-22,
+    y:centerY-21,
+    w:44,
+    h:42,
+    cx:xx,
+    cy:centerY
+  };
+}
+function roundRectPath(ctx,x,y,w,h,r){
+  const rr=Math.min(r,w/2,h/2);
+  ctx.beginPath();
+  ctx.moveTo(x+rr,y);
+  ctx.arcTo(x+w,y,x+w,y+h,rr);
+  ctx.arcTo(x+w,y+h,x,y+h,rr);
+  ctx.arcTo(x,y+h,x,y,rr);
+  ctx.arcTo(x,y,x+w,y,rr);
+  ctx.closePath();
+}
+function drawOperationZone(ctx,zone,isSelected){
+  ctx.save();
+  ctx.fillStyle=isSelected?"rgba(47,128,237,0.11)":"rgba(47,128,237,0.055)";
+  ctx.strokeStyle=isSelected?"rgba(47,128,237,0.75)":"rgba(47,128,237,0.32)";
+  ctx.lineWidth=isSelected?1.6:1.0;
+  roundRectPath(ctx,zone.x,zone.y,zone.w,zone.h,9);
+  ctx.fill();
+  ctx.stroke();
+  ctx.restore();
+}
+function pointInZone(p,zone){
+  return p.x>=zone.x && p.x<=zone.x+zone.w && p.y>=zone.y && p.y<=zone.y+zone.h;
+}
+
 function drawStaff(ctx,c,notes,slots,type,editable){
   const w=c.clientWidth,h=c.clientHeight;ctx.clearRect(0,0,w,h);
   ctx.strokeStyle="#111";ctx.fillStyle="#111";ctx.lineWidth=1;
@@ -267,16 +246,20 @@ function drawStaff(ctx,c,notes,slots,type,editable){
 
   notes.forEach((n,i)=>{
     const xx=x(i,notes.length,w);
-    if(n.rest){type==="whole"?drawWholeRest(ctx,xx):drawHalfRest(ctx,xx);return}
+
+    if(editable){
+      const zone=operationZoneForNote(n,xx,type);
+      drawOperationZone(ctx,zone,selected===i);
+    }
+
+    if(n.rest){
+      type==="whole"?drawWholeRest(ctx,xx):drawHalfRest(ctx,xx);
+      return;
+    }
 
     const yy=y(n.step);
     ledgerLines(ctx,xx,n.step);
     accidental(ctx,xx,yy,n.acc);
-
-    if(editable&&selected===i){
-      ctx.strokeStyle="#2f80ed";ctx.lineWidth=2;ctx.beginPath();ctx.arc(xx,yy,16,0,Math.PI*2);ctx.stroke();
-      ctx.strokeStyle="#111";ctx.lineWidth=1;
-    }
 
     type==="whole"?drawWhole(ctx,xx,yy):drawHalf(ctx,xx,yy,n.step);
     lineThroughHead(ctx,xx,n.step);
@@ -293,11 +276,36 @@ function redraw(){
 function point(e,c){const r=c.getBoundingClientRect();return{x:e.clientX-r.left,y:e.clientY-r.top}}
 function beginEdit(){pushHistory();clearFeedback()}
 cpC.addEventListener("pointerdown",e=>{
-  const p=point(e,cpC);const i=idx(p.x,counter.length,cpC.clientWidth);
-  beginEdit();selected=i;drag=true;counter[i].step=stepFromY(p.y);counter[i].rest=false;redraw();e.preventDefault();
+  const p=point(e,cpC);
+  const i=idx(p.x,counter.length,cpC.clientWidth);
+  const xx=x(i,counter.length,cpC.clientWidth);
+  const zone=operationZoneForNote(counter[i],xx,mode==="1:2"?"half":"whole");
+
+  // v1.9: 薄青の操作範囲外では音符を動かさない。
+  if(!pointInZone(p,zone)){
+    return;
+  }
+
+  beginEdit();
+  selected=i;
+  drag=true;
+
+  // 既存の休符を最初に触った時は、その位置を選択するだけ。
+  // 休符から音符にしたい場合は音高ボタン等を使用。
+  if(!counter[i].rest){
+    counter[i].step=stepFromY(p.y);
+  }
+
+  redraw();
+  e.preventDefault();
 });
 cpC.addEventListener("pointermove",e=>{
-  if(!drag||selected==null)return;const p=point(e,cpC);counter[selected].step=stepFromY(p.y);counter[selected].rest=false;redraw();e.preventDefault();
+  if(!drag||selected==null)return;
+  if(counter[selected].rest)return;
+  const p=point(e,cpC);
+  counter[selected].step=stepFromY(p.y);
+  redraw();
+  e.preventDefault();
 });
 cpC.addEventListener("pointerup",()=>drag=false);cpC.addEventListener("pointercancel",()=>drag=false);
 
