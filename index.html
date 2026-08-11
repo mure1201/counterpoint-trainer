@@ -10,78 +10,130 @@
 <title>池内式 対位法トレーナー</title>
 </head>
 <body>
-<header>
-  <div><h1>対位法トレーナー</h1><p>池内式 二声対位法</p></div>
+<header class="app-header">
+  <div class="title-wrap">
+    <div class="title-line">
+      <h1>対位法トレーナー</h1>
+      <span class="version-pill">PWA v1.1</span>
+    </div>
+    <p>池内式 二声対位法</p>
+  </div>
   <button id="updateBtn" class="update" hidden>更新</button>
 </header>
 
 <main>
-<section class="card">
-  <div class="section-title"><strong>定旋律の問題</strong><span id="problemCount" class="badge"></span></div>
-  <div class="problem-row">
-    <button id="prevProblemBtn">← 前</button>
-    <select id="problemSelect"></select>
-    <button id="nextProblemBtn">次 →</button>
-  </div>
-  <p class="muted">練習用に用意した定旋律です。問題を切り替えると対旋律は空欄になります。</p>
-</section>
+  <section class="card control-card">
+    <div class="control-grid">
+      <div>
+        <div class="label">問題</div>
+        <div class="problem-nav">
+          <button id="prevProblemBtn" aria-label="前の問題">‹</button>
+          <select id="problemSelect"></select>
+          <button id="nextProblemBtn" aria-label="次の問題">›</button>
+        </div>
+        <div id="problemCount" class="subtle"></div>
+      </div>
 
-<section class="card">
-  <strong>入力モード</strong>
-  <div class="mode-switch">
-    <button id="mode12Btn" class="mode active">全音符：二分音符（1:2）</button>
-    <button id="mode11Btn" class="mode">全音符：全音符（1:1）</button>
-  </div>
-  <p id="modeHelp">定旋律は全音符、対旋律は二分音符で入力します。</p>
-</section>
+      <div>
+        <div class="label">モード</div>
+        <div class="segmented">
+          <button id="mode11Btn" class="segment">1:1 全音符同士</button>
+          <button id="mode12Btn" class="segment active">1:2 二分音符対全音符</button>
+        </div>
+      </div>
 
-<section class="card">
-  <div class="section-title">
-    <h2>定旋律</h2>
-    <div class="inline-actions"><span class="badge">全音符・固定</span><button id="playCantusBtn">▶ 再生</button></div>
-  </div>
-  <canvas id="cantusCanvas"></canvas>
-</section>
+      <div class="top-actions">
+        <button id="playCantusBtn" class="tool-btn">▶<span>定旋律</span></button>
+        <button id="playBothBtn" class="tool-btn">▶▶<span>二声</span></button>
+        <button id="stopBtn" class="tool-btn">■<span>停止</span></button>
+        <button id="undoBtn" class="tool-btn">↶<span>戻る</span></button>
+        <button id="redoBtn" class="tool-btn">↷<span>やり直す</span></button>
+        <button id="analyzeBtn" class="tool-btn primary-tool">採点<span>添削</span></button>
+      </div>
+    </div>
+  </section>
 
-<section class="card">
-  <div class="section-title">
-    <h2>対旋律</h2>
-    <span id="selectedPitch" class="badge">未選択</span>
-  </div>
-  <canvas id="counterCanvas"></canvas>
+  <section class="card score-card">
+    <div class="score-title">
+      <h2>定旋律（上声）</h2>
+      <span class="badge">全音符・固定</span>
+    </div>
+    <canvas id="cantusCanvas" aria-label="定旋律"></canvas>
 
-  <div class="controls">
-    <button id="upBtn">↑ 上げる</button>
-    <button id="downBtn">↓ 下げる</button>
-    <button id="sharpBtn">♯</button>
-    <button id="flatBtn">♭</button>
-    <button id="naturalBtn">♮</button>
-    <button id="restBtn">休符</button>
-  </div>
+    <div class="score-title cp-title">
+      <h2 id="cpTitle">対旋律（下声）</h2>
+      <span id="selectedPitch" class="badge">未選択</span>
+    </div>
+    <canvas id="counterCanvas" aria-label="対旋律"></canvas>
+  </section>
 
-  <div class="controls">
-    <button id="playBothBtn" class="play">▶ 二声を再生</button>
-    <button id="stopBtn">■ 停止</button>
-  </div>
-</section>
+  <section class="card input-card">
+    <h2 id="inputTitle">音の入力（対旋律・二分音符）</h2>
+    <div class="input-columns">
+      <div>
+        <div class="label">音の高さ</div>
+        <div id="pitchButtons" class="pitch-grid"></div>
+      </div>
+      <div>
+        <div class="label">臨時記号</div>
+        <div class="acc-grid">
+          <button id="naturalBtn">♮ ナチュラル</button>
+          <button id="sharpBtn">♯ シャープ</button>
+          <button id="flatBtn">♭ フラット</button>
+        </div>
+      </div>
+      <div>
+        <div class="label">休符</div>
+        <button id="restBtn" class="rest-button">𝄽 二分休符</button>
+      </div>
+    </div>
+    <div class="micro-controls">
+      <button id="upBtn">↑ 1段上げる</button>
+      <button id="downBtn">↓ 1段下げる</button>
+      <button id="resetBtn">問題をリセット</button>
+      <button id="clearBtn">対旋律を全削除</button>
+    </div>
+  </section>
 
-<section class="card">
-  <div class="controls">
-    <button id="analyzeBtn" class="primary">この対旋律を添削</button>
-    <button id="resetBtn">問題をリセット</button>
-    <button id="clearBtn">対旋律を全削除</button>
-  </div>
-</section>
+  <section class="card feedback-card">
+    <div class="feedback-head">
+      <h2>添削結果</h2>
+      <div class="legend">
+        <span><i class="dot good-dot"></i>適切</span>
+        <span><i class="dot caution-dot"></i>注意</span>
+        <span><i class="dot error-dot"></i>要修正</span>
+        <span><i class="dot info-dot"></i>判定保留</span>
+      </div>
+    </div>
+    <div id="results"><p class="muted">「採点・添削」を押すと判定結果が表示されます。</p></div>
+    <div id="summaryBadge" class="summary-badge">未判定</div>
+  </section>
 
-<section class="card">
-  <div class="section-title"><h2>添削結果</h2><span id="summaryBadge" class="badge">未判定</span></div>
-  <div id="results"><p class="muted">強拍・弱拍・連続完全協和音程をまとめて判定します。</p></div>
-</section>
-
-<section class="card">
-  <div class="section-title"><h2>バージョン</h2><span class="badge">v1.0</span></div>
-  <p class="muted">音符の符尾方向、五線と音符の重なり、再生、複数の定旋律問題に対応しました。</p>
-</section>
+  <section class="card notation-card">
+    <h2>記号の見方</h2>
+    <div class="notation-grid">
+      <div class="notation-item">
+        <div class="notation-label">ト音記号と五線</div>
+        <canvas id="guideClef"></canvas>
+        <p>五線と重ねて配置</p>
+      </div>
+      <div class="notation-item">
+        <div class="notation-label">全音符</div>
+        <canvas id="guideWhole"></canvas>
+        <p>右上と左下が太い</p>
+      </div>
+      <div class="notation-item">
+        <div class="notation-label">二分音符</div>
+        <canvas id="guideHalf"></canvas>
+        <p>左上と右下が太い</p>
+      </div>
+      <div class="notation-item">
+        <div class="notation-label">二分休符</div>
+        <canvas id="guideRest"></canvas>
+        <p>第3線の上に配置</p>
+      </div>
+    </div>
+  </section>
 </main>
 
 <script src="app.js"></script>
