@@ -1,17 +1,89 @@
-<!doctype html><html lang="ja"><head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
-<meta name="theme-color" content="#f7f7f8"><meta name="apple-mobile-web-app-capable" content="yes">
-<link rel="manifest" href="manifest.webmanifest"><link rel="stylesheet" href="style.css"><title>池内式 対位法トレーナー</title>
-</head><body>
-<header><div><h1>対位法トレーナー</h1><p>池内式 二声対位法・第1類</p></div><button id="updateBtn" class="update" hidden>更新</button></header>
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<meta name="theme-color" content="#f7f7f8">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="stylesheet" href="style.css">
+<title>池内式 対位法トレーナー</title>
+</head>
+<body>
+<header>
+  <div><h1>対位法トレーナー</h1><p>池内式 二声対位法</p></div>
+  <button id="updateBtn" class="update" hidden>更新</button>
+</header>
+
 <main>
-<section class="card"><strong>入力モード</strong>
-<div class="mode-switch"><button id="mode12Btn" class="mode active">全音符：二分音符（1:2）</button><button id="mode11Btn" class="mode">全音符：全音符（1:1）</button></div>
-<p id="modeHelp">定旋律は全音符、対旋律は二分音符で入力します。強拍・弱拍・完全5度/8度の連続を判定します。</p></section>
-<section class="card"><div class="section-title"><h2>定旋律</h2><span class="badge">全音符・固定</span></div><canvas id="cantusCanvas"></canvas></section>
-<section class="card"><div class="section-title"><h2>対旋律</h2><span id="selectedPitch" class="badge">未選択</span></div><canvas id="counterCanvas"></canvas>
-<div class="controls"><button id="upBtn">↑ 上げる</button><button id="downBtn">↓ 下げる</button><button id="sharpBtn">♯</button><button id="flatBtn">♭</button><button id="naturalBtn">♮</button><button id="restBtn">休符</button></div></section>
-<section class="card"><div class="controls"><button id="analyzeBtn" class="primary">この対旋律を添削</button><button id="resetBtn">最初に戻す</button><button id="clearBtn">全音削除</button></div></section>
-<section class="card"><div class="section-title"><h2>添削結果</h2><span id="summaryBadge" class="badge">未判定</span></div><div id="results"><p class="muted">強拍・弱拍・連続完全協和音程をまとめて判定します。</p></div></section>
-<section class="card"><div class="section-title"><h2>バージョン</h2><span class="badge">v0.9</span></div><p class="muted">音符と休符の描画を見直し、iPhoneでも安定してきれいに表示します。</p></section>
-</main><script src="app.js"></script></body></html>
+<section class="card">
+  <div class="section-title"><strong>定旋律の問題</strong><span id="problemCount" class="badge"></span></div>
+  <div class="problem-row">
+    <button id="prevProblemBtn">← 前</button>
+    <select id="problemSelect"></select>
+    <button id="nextProblemBtn">次 →</button>
+  </div>
+  <p class="muted">練習用に用意した定旋律です。問題を切り替えると対旋律は空欄になります。</p>
+</section>
+
+<section class="card">
+  <strong>入力モード</strong>
+  <div class="mode-switch">
+    <button id="mode12Btn" class="mode active">全音符：二分音符（1:2）</button>
+    <button id="mode11Btn" class="mode">全音符：全音符（1:1）</button>
+  </div>
+  <p id="modeHelp">定旋律は全音符、対旋律は二分音符で入力します。</p>
+</section>
+
+<section class="card">
+  <div class="section-title">
+    <h2>定旋律</h2>
+    <div class="inline-actions"><span class="badge">全音符・固定</span><button id="playCantusBtn">▶ 再生</button></div>
+  </div>
+  <canvas id="cantusCanvas"></canvas>
+</section>
+
+<section class="card">
+  <div class="section-title">
+    <h2>対旋律</h2>
+    <span id="selectedPitch" class="badge">未選択</span>
+  </div>
+  <canvas id="counterCanvas"></canvas>
+
+  <div class="controls">
+    <button id="upBtn">↑ 上げる</button>
+    <button id="downBtn">↓ 下げる</button>
+    <button id="sharpBtn">♯</button>
+    <button id="flatBtn">♭</button>
+    <button id="naturalBtn">♮</button>
+    <button id="restBtn">休符</button>
+  </div>
+
+  <div class="controls">
+    <button id="playBothBtn" class="play">▶ 二声を再生</button>
+    <button id="stopBtn">■ 停止</button>
+  </div>
+</section>
+
+<section class="card">
+  <div class="controls">
+    <button id="analyzeBtn" class="primary">この対旋律を添削</button>
+    <button id="resetBtn">問題をリセット</button>
+    <button id="clearBtn">対旋律を全削除</button>
+  </div>
+</section>
+
+<section class="card">
+  <div class="section-title"><h2>添削結果</h2><span id="summaryBadge" class="badge">未判定</span></div>
+  <div id="results"><p class="muted">強拍・弱拍・連続完全協和音程をまとめて判定します。</p></div>
+</section>
+
+<section class="card">
+  <div class="section-title"><h2>バージョン</h2><span class="badge">v1.0</span></div>
+  <p class="muted">音符の符尾方向、五線と音符の重なり、再生、複数の定旋律問題に対応しました。</p>
+</section>
+</main>
+
+<script src="app.js"></script>
+</body>
+</html>
