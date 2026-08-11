@@ -207,3 +207,24 @@ canvas{width:100%;height:220px;display:block;background:#fff;touch-action:none}
 .score-scroll canvas{
   height:220px !important;
 }
+
+/* v1.16: counterpoint visibility hardening */
+#counterScroll{
+  display:block !important;
+  height:220px !important;
+  min-height:220px !important;
+  overflow-x:auto !important;
+  overflow-y:hidden !important;
+  background:rgba(47,128,237,0.025);
+}
+#counterCanvas{
+  display:block !important;
+  visibility:visible !important;
+  height:220px !important;
+}
+#cantusScroll{
+  height:220px !important;
+  min-height:220px !important;
+  overflow-x:auto !important;
+  overflow-y:hidden !important;
+}

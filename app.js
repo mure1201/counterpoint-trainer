@@ -1,5 +1,5 @@
 
-const APP_VERSION="1.15.0";
+const APP_VERSION="1.16.0";
 const $=id=>document.getElementById(id);
 
 const cfC=$("cantusCanvas"), cpC=$("counterCanvas");
@@ -428,18 +428,31 @@ function lineThroughHead(ctx,px,step){
   ctx.beginPath();ctx.moveTo(px-(isLedger?LEDGER_HALF:10.8),py);ctx.lineTo(px+(isLedger?LEDGER_HALF:10.8),py);ctx.stroke();ctx.restore();
 }
 
+function roundRectPath(ctx,x,y,w,h,r){
+  const rr=Math.min(r,w/2,h/2);
+  ctx.beginPath();
+  ctx.moveTo(x+rr,y);
+  ctx.arcTo(x+w,y,x+w,y+h,rr);
+  ctx.arcTo(x+w,y+h,x,y+h,rr);
+  ctx.arcTo(x,y+h,x,y,rr);
+  ctx.arcTo(x,y,x+w,y,rr);
+  ctx.closePath();
+}
+
 function editableZone(canvasWidth){
+  const top=Math.max(8,TOP-LINE*1.85);
+  const bottom=Math.min(212,TOP+LINE*6.15);
   return {
-    x:NOTE_LEFT-10,
-    y:TOP-LINE*2.0,
-    w:canvasWidth-NOTE_LEFT-RIGHT+12,
-    h:LINE*8.0
+    x:Math.max(6,NOTE_LEFT-10),
+    y:top,
+    w:Math.max(120,canvasWidth-(NOTE_LEFT-10)-RIGHT-6),
+    h:bottom-top
   };
 }
 function drawEditableZone(ctx,canvasWidth){
   const z=editableZone(canvasWidth);
   ctx.save();
-  ctx.fillStyle="rgba(47,128,237,0.055)";
+  ctx.fillStyle="rgba(47,128,237,0.065)";
   ctx.strokeStyle="rgba(47,128,237,0.28)";
   ctx.lineWidth=1.1;
   roundRectPath(ctx,z.x,z.y,z.w,z.h,12);
@@ -456,7 +469,13 @@ function drawStaff(ctx,c,notes,slots,type,editable){
   const w=c.clientWidth,h=c.clientHeight;ctx.clearRect(0,0,w,h);
   ctx.strokeStyle="#111";ctx.fillStyle="#111";ctx.lineWidth=1;
 
-  if(editable)drawEditableZone(ctx,w);
+  if(editable){
+    try{
+      drawEditableZone(ctx,w);
+    }catch(err){
+      console.error("editable zone draw error",err);
+    }
+  }
 
   for(let i=0;i<5;i++){
     const yy=TOP+i*LINE;ctx.beginPath();ctx.moveTo(STAFF_LEFT,yy);ctx.lineTo(w-RIGHT,yy);ctx.stroke();
@@ -496,12 +515,34 @@ function redraw(){
   setCanvasWidth(cfC,measures);
   setCanvasWidth(cpC,measures);
 
-  // iOS Safariでdisplay/width更新直後に0幅になるケースを避ける
   requestAnimationFrame(()=>{
-    resize(cfC);resize(cpC);
+    resize(cfC);
+    resize(cpC);
 
-    drawStaff(cfX,cfC,cantus,1,"whole",false);
-    drawStaff(cpX,cpC,counter,mode==="1:2"?2:1,mode==="1:2"?"half":"whole",true);
+    try{
+      drawStaff(cfX,cfC,cantus,1,"whole",false);
+    }catch(err){
+      console.error("cantus draw error",err);
+    }
+
+    try{
+      drawStaff(cpX,cpC,counter,mode==="1:2"?2:1,mode==="1:2"?"half":"whole",true);
+    }catch(err){
+      console.error("counterpoint draw error",err);
+      // Fallback: at least redraw the five staff lines so the entry area never disappears.
+      const w=cpC.clientWidth;
+      cpX.clearRect(0,0,w,220);
+      cpX.strokeStyle="#111";
+      cpX.lineWidth=1;
+      for(let i=0;i<5;i++){
+        const yy=TOP+i*LINE;
+        cpX.beginPath();
+        cpX.moveTo(STAFF_LEFT,yy);
+        cpX.lineTo(w-RIGHT,yy);
+        cpX.stroke();
+      }
+      drawClef(cpX);
+    }
 
     $("cantusScroll").style.display="block";
     $("counterScroll").style.display="block";
@@ -795,19 +836,17 @@ try{
 }catch(e){}
 
 let syncingScroll=false;
-function mirrorScroll(source,target){
+function syncBothScores(source,target){
   if(syncingScroll)return;
   syncingScroll=true;
 
-  const sourceMax=Math.max(1,source.scrollWidth-source.clientWidth);
-  const targetMax=Math.max(0,target.scrollWidth-target.clientWidth);
-  const ratio=source.scrollLeft/sourceMax;
-  target.scrollLeft=ratio*targetMax;
+  // Both canvases use the same measure count and width, so mirror scrollLeft directly.
+  target.scrollLeft=source.scrollLeft;
 
   requestAnimationFrame(()=>{syncingScroll=false});
 }
-$("cantusScroll").addEventListener("scroll",()=>mirrorScroll($("cantusScroll"),$("counterScroll")),{passive:true});
-$("counterScroll").addEventListener("scroll",()=>mirrorScroll($("counterScroll"),$("cantusScroll")),{passive:true});
+$("cantusScroll").addEventListener("scroll",()=>syncBothScores($("cantusScroll"),$("counterScroll")),{passive:true});
+$("counterScroll").addEventListener("scroll",()=>syncBothScores($("counterScroll"),$("cantusScroll")),{passive:true});
 
 // auto update
 let waitingWorker=null;
