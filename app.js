@@ -1,5 +1,5 @@
 
-const APP_VERSION="1.6.0";
+const APP_VERSION="1.7.0";
 const $=id=>document.getElementById(id);
 
 const cfC=$("cantusCanvas"), cpC=$("counterCanvas");
@@ -98,12 +98,16 @@ function midi(n){return baseMidi(n.step)+n.acc}
 function drawClef(ctx,staffTop=TOP,staffLeft=STAFF_LEFT){
   ctx.save();
   ctx.fillStyle="#111";
-  // v1.5: 五線上端からしっかりはみ出す大きさへ拡大。
-  // 中央の交差とG線ループは五線上に残るよう、少し上へ移動。
-  ctx.font="116px 'Times New Roman', Georgia, serif";
+
+  // v1.7:
+  // ・v1.6よりさらに大型化
+  // ・五線の上下にはっきりはみ出す
+  // ・ト音記号上部の交差箇所が、五線の第2線付近に来るよう上へ移動
+  ctx.font="132px 'Times New Roman', Georgia, serif";
   ctx.textAlign="center";
   ctx.textBaseline="middle";
-  ctx.fillText("𝄞",49,staffTop+LINE*1.88);
+  ctx.fillText("𝄞",51,staffTop+LINE*1.52);
+
   ctx.restore();
 }
 
@@ -114,27 +118,48 @@ function openHead(ctx,px,py,kind){
   ctx.translate(px,py);
   ctx.rotate(-0.30);
 
-  // v1.5: 玉の黒線を一段細くし、出版譜に近い抜け感へ。
-  // 対角方向の太さの違いは維持する。
-  const outerW = kind==="whole" ? 10.0 : 9.7;
-  const outerH = kind==="whole" ? 6.20 : 6.00;
+  // v1.7:
+  // 音符頭全体を太くするのではなく、
+  // 指定した対角2か所だけを太く描く。
+  //
+  // 全音符：右上・左下を太く
+  // 二分音符：左上・右下を太く
 
-  ctx.fillStyle="#111";
-  ctx.beginPath();
-  ctx.ellipse(0,0,outerW,outerH,0,0,Math.PI*2);
-  ctx.fill();
+  const rx = kind==="whole" ? 10.0 : 9.7;
+  const ry = kind==="whole" ? 6.15 : 5.95;
 
-  // 全音符：右上・左下が太い
-  // 二分音符：左上・右下が太い
-  const sx = kind==="whole" ? -1.48 : 1.42;
-  const sy = kind==="whole" ? -0.86 : 0.84;
-  const holeW = kind==="whole" ? 7.35 : 7.13;
-  const holeH = kind==="whole" ? 4.16 : 4.00;
-
+  // 内側を白で抜く
   ctx.fillStyle="#fff";
   ctx.beginPath();
-  ctx.ellipse(sx,sy,holeW,holeH,0,0,Math.PI*2);
+  ctx.ellipse(0,0,rx-0.2,ry-0.2,0,0,Math.PI*2);
   ctx.fill();
+
+  // 基本線：細く均一
+  ctx.strokeStyle="#111";
+  ctx.lineCap="round";
+  ctx.lineWidth=1.55;
+  ctx.beginPath();
+  ctx.ellipse(0,0,rx,ry,0,0,Math.PI*2);
+  ctx.stroke();
+
+  // 太くする部分だけを追加描画
+  ctx.lineWidth=3.9;
+
+  function thickArc(center, halfWidth=0.46){
+    ctx.beginPath();
+    ctx.ellipse(0,0,rx,ry,0,center-halfWidth,center+halfWidth);
+    ctx.stroke();
+  }
+
+  if(kind==="whole"){
+    // 右上（約315°）・左下（約135°）
+    thickArc(Math.PI*7/4,0.48);
+    thickArc(Math.PI*3/4,0.48);
+  }else{
+    // 左上（約225°）・右下（約45°）
+    thickArc(Math.PI*5/4,0.46);
+    thickArc(Math.PI/4,0.46);
+  }
 
   ctx.restore();
 }
@@ -386,7 +411,7 @@ function guideCanvas(id,kind){
   for(let i=0;i<5;i++){ctx.beginPath();ctx.moveTo(l,t+i*sp);ctx.lineTo(l+w,t+i*sp);ctx.stroke()}
   const px=b.width/2,py=t+2*sp;
   if(kind==="clef"){
-    ctx.font="92px serif";ctx.fillStyle="#111";ctx.textAlign="center";ctx.textBaseline="middle";ctx.fillText("𝄞",px-27,t+2.05*sp);
+    ctx.font="112px serif";ctx.fillStyle="#111";ctx.textAlign="center";ctx.textBaseline="middle";ctx.fillText("𝄞",px-24,t+1.55*sp);
   }else if(kind==="whole"){
     openHead(ctx,px,py,"whole");lineThroughGuide(ctx,px,py);
   }else if(kind==="half"){
