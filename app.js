@@ -1,5 +1,5 @@
 
-const APP_VERSION="1.2.0";
+const APP_VERSION="1.4.0";
 const $=id=>document.getElementById(id);
 
 const cfC=$("cantusCanvas"), cpC=$("counterCanvas");
@@ -13,6 +13,7 @@ let mode="1:2", selected=null, drag=false;
 let problemIndex=0, cantus=[], counter=[];
 let history=[], future=[];
 let audioCtx=null, activeNodes=[];
+let tempoBpm=80;
 
 const PROBLEMS=[
 {name:"問題 1",steps:[0,1,3,2,1,0]},
@@ -73,12 +74,12 @@ function midi(n){return baseMidi(n.step)+n.acc}
 function drawClef(ctx,staffTop=TOP,staffLeft=STAFF_LEFT){
   ctx.save();
   ctx.fillStyle="#111";
-  // v1.2: iPhone実画面に合わせて約18%拡大。
-  // 交差部が第2〜第4線付近へ自然に重なるよう、中心位置も微調整。
-  ctx.font="90px 'Times New Roman', Georgia, serif";
+  // v1.3: 五線の上下へ明確にはみ出すサイズへ拡大。
+  // G線を囲むループと中央の交差が五線に重なるよう位置調整。
+  ctx.font="104px 'Times New Roman', Georgia, serif";
   ctx.textAlign="center";
   ctx.textBaseline="middle";
-  ctx.fillText("𝄞",45,staffTop+LINE*2.20);
+  ctx.fillText("𝄞",47,staffTop+LINE*2.08);
   ctx.restore();
 }
 
@@ -89,10 +90,10 @@ function openHead(ctx,px,py,kind){
   ctx.translate(px,py);
   ctx.rotate(-0.30);
 
-  // v1.2: 外形を少し小さく、穴を大きくして線を細く均整化。
-  // ただし全音符／二分音符それぞれの対角方向の太さは保持する。
+  // v1.3: 黒線が太く見え過ぎないよう、内側の白抜きをさらに広げる。
+  // 全音符・二分音符で対角方向の太さの違いは明確に残す。
   const outerW = kind==="whole" ? 10.0 : 9.7;
-  const outerH = kind==="whole" ? 6.35 : 6.15;
+  const outerH = kind==="whole" ? 6.25 : 6.05;
 
   ctx.fillStyle="#111";
   ctx.beginPath();
@@ -101,10 +102,10 @@ function openHead(ctx,px,py,kind){
 
   // 全音符：右上・左下が太い
   // 二分音符：左上・右下が太い
-  const sx = kind==="whole" ? -1.30 : 1.25;
-  const sy = kind==="whole" ? -0.78 : 0.75;
-  const holeW = kind==="whole" ? 6.75 : 6.55;
-  const holeH = kind==="whole" ? 3.78 : 3.62;
+  const sx = kind==="whole" ? -1.40 : 1.35;
+  const sy = kind==="whole" ? -0.82 : 0.80;
+  const holeW = kind==="whole" ? 7.15 : 6.95;
+  const holeH = kind==="whole" ? 4.02 : 3.88;
 
   ctx.fillStyle="#fff";
   ctx.beginPath();
@@ -117,9 +118,10 @@ function drawWhole(ctx,px,py){openHead(ctx,px,py,"whole")}
 function drawHalf(ctx,px,py,step){
   openHead(ctx,px,py,"half");
   const stemDown=step>=6; // 中央線以上は下向き
+  const stemLength=LINE*3; // v1.4: 五線の3段分
   ctx.save();ctx.strokeStyle="#111";ctx.lineWidth=1.7;ctx.beginPath();
-  if(stemDown){ctx.moveTo(px-7.7,py);ctx.lineTo(px-7.7,py+33)}
-  else{ctx.moveTo(px+7.7,py);ctx.lineTo(px+7.7,py-33)}
+  if(stemDown){ctx.moveTo(px-7.7,py);ctx.lineTo(px-7.7,py+stemLength)}
+  else{ctx.moveTo(px+7.7,py);ctx.lineTo(px+7.7,py-stemLength)}
   ctx.stroke();ctx.restore();
 }
 function drawHalfRest(ctx,px){
@@ -252,12 +254,35 @@ function scheduleTone(n,start,dur,gainValue=.08,type="sine"){
   g.gain.setValueAtTime(gainValue,Math.max(start+.02,start+dur-.04));g.gain.exponentialRampToValueAtTime(.0001,start+dur);
   o.connect(g).connect(ac.destination);o.start(start);o.stop(start+dur+.02);activeNodes.push(o);
 }
-function playCantus(){stopPlayback();const ac=ensureAudio(),u=.48,s=ac.currentTime+.05;cantus.forEach((n,i)=>scheduleTone(n,s+i*u*2,u*1.9,.09,"sine"))}
-function playBoth(){stopPlayback();const ac=ensureAudio(),u=.48,s=ac.currentTime+.05;
-  if(mode==="1:2"){cantus.forEach((n,i)=>scheduleTone(n,s+i*u*2,u*1.9,.065,"sine"));counter.forEach((n,i)=>scheduleTone(n,s+i*u,u*.92,.065,"triangle"))}
-  else{cantus.forEach((n,i)=>scheduleTone(n,s+i*u,u*.92,.065,"sine"));counter.forEach((n,i)=>scheduleTone(n,s+i*u,u*.92,.065,"triangle"))}
+function halfBeatSeconds(){return 60/tempoBpm}
+function playCantus(){
+  stopPlayback();
+  const ac=ensureAudio(),u=halfBeatSeconds(),s=ac.currentTime+.05;
+  cantus.forEach((n,i)=>scheduleTone(n,s+i*u*2,u*1.90,.09,"sine"));
+}
+function playBoth(){
+  stopPlayback();
+  const ac=ensureAudio(),u=halfBeatSeconds(),s=ac.currentTime+.05;
+  if(mode==="1:2"){
+    cantus.forEach((n,i)=>scheduleTone(n,s+i*u*2,u*1.90,.065,"sine"));
+    counter.forEach((n,i)=>scheduleTone(n,s+i*u,u*.92,.065,"triangle"));
+  }else{
+    // 1:1では全音符同士。1音を二分音符2拍分として再生。
+    cantus.forEach((n,i)=>scheduleTone(n,s+i*u*2,u*1.90,.065,"sine"));
+    counter.forEach((n,i)=>scheduleTone(n,s+i*u*2,u*1.90,.065,"triangle"));
+  }
 }
 $("playCantusBtn").onclick=playCantus;$("playBothBtn").onclick=playBoth;$("stopBtn").onclick=stopPlayback;
+
+function setTempo(v){
+  tempoBpm=Math.max(40,Math.min(160,Number(v)||80));
+  $("tempoSlider").value=tempoBpm;
+  $("tempoValue").textContent=`♩=${tempoBpm}`;
+}
+$("tempoSlider").addEventListener("input",e=>setTempo(e.target.value));
+$("tempoDownBtn").onclick=()=>setTempo(tempoBpm-4);
+$("tempoUpBtn").onclick=()=>setTempo(tempoBpm+4);
+setTempo(80);
 
 // --- analysis ---
 function isConsonant(cf,cp){const s=Math.abs(midi(cp)-midi(cf))%12;return [0,3,4,7,8,9].includes(s)}
@@ -318,11 +343,11 @@ function guideCanvas(id,kind){
   for(let i=0;i<5;i++){ctx.beginPath();ctx.moveTo(l,t+i*sp);ctx.lineTo(l+w,t+i*sp);ctx.stroke()}
   const px=b.width/2,py=t+2*sp;
   if(kind==="clef"){
-    ctx.font="78px serif";ctx.fillStyle="#111";ctx.textAlign="center";ctx.textBaseline="middle";ctx.fillText("𝄞",px-28,t+2.15*sp);
+    ctx.font="92px serif";ctx.fillStyle="#111";ctx.textAlign="center";ctx.textBaseline="middle";ctx.fillText("𝄞",px-27,t+2.05*sp);
   }else if(kind==="whole"){
     openHead(ctx,px,py,"whole");lineThroughGuide(ctx,px,py);
   }else if(kind==="half"){
-    openHead(ctx,px,py,"half");ctx.strokeStyle="#111";ctx.lineWidth=1.6;ctx.beginPath();ctx.moveTo(px+7.7,py);ctx.lineTo(px+7.7,py-31);ctx.stroke();lineThroughGuide(ctx,px,py);
+    openHead(ctx,px,py,"half");ctx.strokeStyle="#111";ctx.lineWidth=1.6;ctx.beginPath();ctx.moveTo(px+7.7,py);ctx.lineTo(px+7.7,py-sp*3);ctx.stroke();lineThroughGuide(ctx,px,py);
   }else if(kind==="rest"){
     ctx.fillStyle="#111";ctx.fillRect(px-7,t+2*sp-5.5,14,5.5);
   }

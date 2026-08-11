@@ -72,3 +72,28 @@ canvas{width:100%;height:220px;display:block;background:#fff;touch-action:none}
   .notation-grid{grid-template-columns:1fr 1fr}
   canvas{height:205px}
 }
+
+.tempo-control{
+  min-width:0;
+}
+.tempo-row{
+  display:grid;
+  grid-template-columns:auto 1fr auto auto;
+  gap:7px;
+  align-items:center;
+}
+.tempo-row input[type="range"]{
+  width:100%;
+  accent-color:var(--blue);
+}
+.tempo-value{
+  min-width:58px;
+  text-align:center;
+  font-variant-numeric:tabular-nums;
+  font-weight:750;
+  color:var(--blue);
+}
+@media(max-width:800px){
+  .tempo-row{grid-template-columns:auto 1fr auto}
+  .tempo-value{grid-column:1/-1;justify-self:center}
+}

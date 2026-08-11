@@ -14,7 +14,7 @@
   <div class="title-wrap">
     <div class="title-line">
       <h1>対位法トレーナー</h1>
-      <span class="version-pill">PWA v1.2</span>
+      <span class="version-pill">PWA v1.4</span>
     </div>
     <p>池内式 二声対位法</p>
   </div>
@@ -40,6 +40,17 @@
           <button id="mode11Btn" class="segment">1:1 全音符同士</button>
           <button id="mode12Btn" class="segment active">1:2 二分音符対全音符</button>
         </div>
+      </div>
+
+      <div class="tempo-control">
+        <div class="label">テンポ</div>
+        <div class="tempo-row">
+          <button id="tempoDownBtn" aria-label="テンポを下げる">−</button>
+          <input id="tempoSlider" type="range" min="40" max="160" step="2" value="80">
+          <button id="tempoUpBtn" aria-label="テンポを上げる">＋</button>
+          <span id="tempoValue" class="tempo-value">♩=80</span>
+        </div>
+        <div class="subtle">二分音符を1拍として再生速度を調整</div>
       </div>
 
       <div class="top-actions">
