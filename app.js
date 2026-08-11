@@ -1,259 +1,41 @@
 
-const $ = (id)=>document.getElementById(id);
+const $=id=>document.getElementById(id), cfC=$("cantusCanvas"), cpC=$("counterCanvas");
+const cfX=cfC.getContext("2d"), cpX=cpC.getContext("2d");
+const LINE=18, TOP=64, LEFT=58, RIGHT=16, C4Y=TOP+LINE*5;
+let mode="1:2", selected=null, drag=false;
+let cantus=[0,1,3,2,1,0].map(step=>({step,rest:false}));
+let counter=[];
+function resetCounter(){counter=(mode==="1:2"?[4,5,5,6,7,5,4,3,3,2,1,7]:[4,5,6,5,4,3]).map(step=>({step,rest:false}));}
+resetCounter();
 
-const cantusCanvas = $("cantusCanvas");
-const counterCanvas = $("counterCanvas");
-const ctxCF = cantusCanvas.getContext("2d");
-const ctxCP = counterCanvas.getContext("2d");
+function resize(c){const r=devicePixelRatio||1, b=c.getBoundingClientRect();c.width=b.width*r;c.height=b.height*r;c.getContext("2d").setTransform(r,0,0,r,0,0)}
+function y(step){return C4Y-step*(LINE/2)} function stepFromY(v){return Math.max(-2,Math.min(16,Math.round((C4Y-v)/(LINE/2))))}
+function x(i,n,w){return LEFT+(w-LEFT-RIGHT)*(i+.5)/n} function idx(px,n,w){return Math.max(0,Math.min(n-1,Math.floor(((px-LEFT)/(w-LEFT-RIGHT))*n)))}
+function noteName(step){const N=["C","D","E","F","G","A","B"],o=Math.floor(step/7),i=((step%7)+7)%7;return N[i]+(4+o)}
+function midi(step){const B=[60,62,64,65,67,69,71],o=Math.floor(step/7),i=((step%7)+7)%7;return B[i]+o*12}
 
-const LINE_SPACING = 18;
-const TOP = 55;
-const LEFT = 18;
-const RIGHT = 18;
-const C4_Y = TOP + LINE_SPACING * 5;
-const MIN_STEP = -2;
-const MAX_STEP = 16;
-
-let cantus = [0,1,3,2,1,0].map(step=>({step,rest:false}));
-let counter = [4,5,5,6,7,5,4,3,3,2,1,7].map(step=>({step,rest:false}));
-let selectedIndex = null;
-let dragging = false;
-let deferredPrompt = null;
-
-function resizeCanvas(canvas){
-  const ratio = window.devicePixelRatio || 1;
-  const rect = canvas.getBoundingClientRect();
-  canvas.width = Math.floor(rect.width * ratio);
-  canvas.height = Math.floor(rect.height * ratio);
-  const ctx = canvas.getContext("2d");
-  ctx.setTransform(ratio,0,0,ratio,0,0);
-}
-
-function stepToName(step){
-  const names=["C","D","E","F","G","A","B"];
-  const octaveOffset = Math.floor(step/7);
-  const idx = ((step%7)+7)%7;
-  const octave = 4 + octaveOffset;
-  return `${names[idx]}${octave}`;
-}
-function stepToMidi(step){
-  const base=[60,62,64,65,67,69,71];
-  const octaveOffset=Math.floor(step/7);
-  const idx=((step%7)+7)%7;
-  return base[idx] + octaveOffset*12;
-}
-function yForStep(step){ return C4_Y - step*(LINE_SPACING/2); }
-function stepFromY(y){
-  return Math.max(MIN_STEP,Math.min(MAX_STEP,Math.round((C4_Y-y)/(LINE_SPACING/2))));
-}
-function xForIndex(index,count,width){
-  const usable=width-LEFT-RIGHT;
-  return LEFT + usable*(index+0.5)/count;
-}
-function indexFromX(x,count,width){
-  const usable=width-LEFT-RIGHT;
-  return Math.max(0,Math.min(count-1,Math.floor(((x-LEFT)/usable)*count)));
-}
-function cssPoint(evt,canvas){
-  const r=canvas.getBoundingClientRect();
-  const p=evt.touches ? evt.touches[0] : evt;
-  return {x:p.clientX-r.left,y:p.clientY-r.top};
-}
-
-function drawStaff(ctx,width,height,notes,slotsPerMeasure,editable){
-  ctx.clearRect(0,0,width,height);
-  const dark = matchMedia("(prefers-color-scheme: dark)").matches;
-  ctx.strokeStyle = dark ? "#f2f2f7" : "#1c1c1e";
-  ctx.fillStyle = dark ? "#f2f2f7" : "#1c1c1e";
-  ctx.lineWidth=1;
-
-  for(let i=0;i<5;i++){
-    const y=TOP+i*LINE_SPACING;
-    ctx.beginPath();ctx.moveTo(LEFT,y);ctx.lineTo(width-RIGHT,y);ctx.stroke();
-  }
-  const measures=Math.max(1,Math.floor(notes.length/slotsPerMeasure));
-  ctx.strokeStyle = dark ? "#636366" : "#aeaeb2";
-  for(let i=0;i<=measures;i++){
-    const x=LEFT+(width-LEFT-RIGHT)*i/measures;
-    ctx.beginPath();ctx.moveTo(x,TOP);ctx.lineTo(x,TOP+LINE_SPACING*4);ctx.stroke();
-  }
-
-  notes.forEach((n,i)=>{
-    const x=xForIndex(i,notes.length,width);
-    if(n.rest){
-      ctx.fillStyle = dark ? "#f2f2f7" : "#1c1c1e";
-      ctx.font="24px serif";
-      ctx.fillText("𝄽",x-8,TOP+LINE_SPACING*2+8);
-      return;
-    }
-    const y=yForStep(n.step);
-
-    // ledger
-    const bottom=TOP+LINE_SPACING*4;
-    if(y>bottom+LINE_SPACING/2){
-      const count=Math.max(1,Math.floor((y-bottom)/LINE_SPACING));
-      ctx.strokeStyle=dark ? "#f2f2f7" : "#1c1c1e";
-      for(let j=1;j<=count;j++){
-        const ly=bottom+j*LINE_SPACING;
-        ctx.beginPath();ctx.moveTo(x-14,ly);ctx.lineTo(x+14,ly);ctx.stroke();
-      }
-    }
-
-    if(editable && selectedIndex===i){
-      ctx.strokeStyle="#0a84ff";ctx.lineWidth=2;
-      ctx.beginPath();ctx.arc(x,y,17,0,Math.PI*2);ctx.stroke();
-    }
-
-    ctx.save();
-    ctx.translate(x,y);
-    ctx.rotate(-0.3);
-    ctx.fillStyle=dark ? "#f2f2f7" : "#1c1c1e";
-    ctx.beginPath();ctx.ellipse(0,0,9,6,0,0,Math.PI*2);ctx.fill();
-    ctx.restore();
-    ctx.fillRect(x+7,y-32,1.5,32);
+function clef(ctx){ctx.font="62px serif";ctx.textAlign="center";ctx.textBaseline="middle";ctx.fillText("𝄞",30,TOP+LINE*2)}
+function whole(ctx,px,py){ctx.save();ctx.translate(px,py);ctx.rotate(-.28);ctx.lineWidth=2;ctx.beginPath();ctx.ellipse(0,0,10,6.5,0,0,Math.PI*2);ctx.stroke();ctx.restore()}
+function half(ctx,px,py){whole(ctx,px,py);ctx.fillRect(px+7,py-34,1.6,34)}
+function draw(ctx,c,notes,slots,type,editable){
+  const w=c.clientWidth,h=c.clientHeight;ctx.clearRect(0,0,w,h);ctx.strokeStyle="#111";ctx.fillStyle="#111";
+  for(let i=0;i<5;i++){let yy=TOP+i*LINE;ctx.beginPath();ctx.moveTo(LEFT,yy);ctx.lineTo(w-RIGHT,yy);ctx.stroke()} clef(ctx);
+  let m=Math.max(1,Math.floor(notes.length/slots));ctx.globalAlpha=.35;
+  for(let i=0;i<=m;i++){let xx=LEFT+(w-LEFT-RIGHT)*i/m;ctx.beginPath();ctx.moveTo(xx,TOP);ctx.lineTo(xx,TOP+LINE*4);ctx.stroke()} ctx.globalAlpha=1;
+  notes.forEach((n,i)=>{let xx=x(i,notes.length,w);if(n.rest){ctx.font="24px serif";ctx.fillText("𝄽",xx-7,TOP+LINE*2+7);return}let yy=y(n.step);
+    if(editable&&selected===i){ctx.strokeStyle="#0a84ff";ctx.lineWidth=2;ctx.beginPath();ctx.arc(xx,yy,17,0,Math.PI*2);ctx.stroke();ctx.strokeStyle="#111";ctx.lineWidth=1}
+    type==="whole"?whole(ctx,xx,yy):half(ctx,xx,yy);
   });
 }
-
-function redraw(){
-  resizeCanvas(cantusCanvas); resizeCanvas(counterCanvas);
-  drawStaff(ctxCF,cantusCanvas.clientWidth,cantusCanvas.clientHeight,cantus,1,false);
-  drawStaff(ctxCP,counterCanvas.clientWidth,counterCanvas.clientHeight,counter,2,true);
-  if(selectedIndex==null) $("selectedPitch").textContent="未選択";
-  else $("selectedPitch").textContent=counter[selectedIndex].rest ? "休符" : stepToName(counter[selectedIndex].step);
-}
-
-function pickOrMove(point){
-  const i=indexFromX(point.x,counter.length,counterCanvas.clientWidth);
-  selectedIndex=i;
-  counter[i].step=stepFromY(point.y);
-  counter[i].rest=false;
-  redraw();
-}
-
-counterCanvas.addEventListener("pointerdown",e=>{
-  counterCanvas.setPointerCapture?.(e.pointerId);
-  dragging=true; pickOrMove(cssPoint(e,counterCanvas)); e.preventDefault();
-});
-counterCanvas.addEventListener("pointermove",e=>{
-  if(!dragging || selectedIndex==null) return;
-  const p=cssPoint(e,counterCanvas);
-  counter[selectedIndex].step=stepFromY(p.y);
-  counter[selectedIndex].rest=false;
-  redraw(); e.preventDefault();
-});
-counterCanvas.addEventListener("pointerup",e=>{ dragging=false; e.preventDefault(); });
-counterCanvas.addEventListener("pointercancel",()=>dragging=false);
-
-$("upBtn").onclick=()=>{
-  if(selectedIndex==null)return;
-  counter[selectedIndex].step=Math.min(MAX_STEP,counter[selectedIndex].step+1);
-  counter[selectedIndex].rest=false; redraw();
-};
-$("downBtn").onclick=()=>{
-  if(selectedIndex==null)return;
-  counter[selectedIndex].step=Math.max(MIN_STEP,counter[selectedIndex].step-1);
-  counter[selectedIndex].rest=false; redraw();
-};
-$("restBtn").onclick=()=>{
-  if(selectedIndex==null)return;
-  counter[selectedIndex].rest=true; redraw();
-};
-$("resetBtn").onclick=()=>{
-  cantus=[0,1,3,2,1,0].map(step=>({step,rest:false}));
-  counter=[4,5,5,6,7,5,4,3,3,2,1,7].map(step=>({step,rest:false}));
-  selectedIndex=null; $("results").innerHTML='<p class="muted">「この対旋律を添削」を押すと結果を表示します。</p>';
-  $("summaryBadge").textContent="未判定"; redraw();
-};
-$("clearBtn").onclick=()=>{
-  counter.forEach(n=>n.rest=true);selectedIndex=null;redraw();
-};
-
-function finding(severity,title,location,message){
-  return {severity,title,location,message};
-}
-function analyze(){
-  const out=[];
-
-  // 強拍の基本和声音程
-  for(let m=0;m<cantus.length;m++){
-    const cp=counter[m*2], cf=cantus[m];
-    if(cp.rest||cf.rest) continue;
-    const semis=Math.abs(stepToMidi(cp.step)-stepToMidi(cf.step))%12;
-    const allowed=[0,3,4,7,8,9].includes(semis);
-    out.push(finding(
-      allowed?"good":"error",
-      "強拍の和声音程",
-      `第${m+1}小節・強拍`,
-      allowed ? "強拍の基本和声音程として扱えます。" : "強拍の基本和声音程として要確認です。"
-    ));
-  }
-
-  // 5度/8度連続 簡易
-  for(let i=1;i<counter.length;i++){
-    const a=counter[i-1], b=counter[i];
-    if(a.rest||b.rest)continue;
-    const cfa=cantus[Math.floor((i-1)/2)], cfb=cantus[Math.floor(i/2)];
-    const int1=Math.abs(stepToMidi(a.step)-stepToMidi(cfa.step))%12;
-    const int2=Math.abs(stepToMidi(b.step)-stepToMidi(cfb.step))%12;
-    if(int1===7&&int2===7){
-      out.push(finding("caution","完全5度の連続",`位置${i}→${i+1}`,"完全5度が連続しています。声部進行と例外条件を確認してください。"));
-    }
-    if(int1===0&&int2===0){
-      out.push(finding("caution","完全8度の連続",`位置${i}→${i+1}`,"完全8度が連続しています。声部進行と例外条件を確認してください。"));
-    }
-  }
-
-  // 同方向の順次進行（暫定）
-  let runDir=0, run=0, start=0;
-  function flush(end){
-    if(run>=4) out.push(finding("avoid","同方向の順次進行",`位置${start+1}～${end+1}`,"同方向への順次進行が長く続いています。"));
-  }
-  for(let i=1;i<counter.length;i++){
-    if(counter[i-1].rest||counter[i].rest){flush(i-1);run=0;runDir=0;continue;}
-    const d=counter[i].step-counter[i-1].step;
-    const dir=Math.sign(d);
-    if(Math.abs(d)===1 && dir!==0){
-      if(dir===runDir)run++;
-      else{flush(i-1);runDir=dir;run=1;start=i-1;}
-    }else{flush(i-1);run=0;runDir=0;}
-  }
-  flush(counter.length-1);
-
-  return out;
-}
-function renderResults(items){
-  const r=$("results");r.innerHTML="";
-  if(items.length===0){
-    r.innerHTML='<p class="muted">現在の簡易判定では問題を検出しませんでした。</p>';
-    $("summaryBadge").textContent="問題なし";
-    return;
-  }
-  const problems=items.filter(x=>["error","avoid","caution"].includes(x.severity)).length;
-  $("summaryBadge").textContent=`注意 ${problems}件`;
-  items.forEach(x=>{
-    const div=document.createElement("div");
-    div.className=`result ${x.severity}`;
-    const sym={error:"✕",avoid:"△",caution:"!",good:"✓",info:"i"}[x.severity]||"○";
-    div.innerHTML=`<div class="result-head"><span>${sym}</span><span>${x.title}</span></div>
-      <div class="loc">${x.location}</div><p>${x.message}</p>`;
-    r.appendChild(div);
-  });
-}
-$("analyzeBtn").onclick=()=>renderResults(analyze());
-
-window.addEventListener("resize",redraw);
-window.addEventListener("load",redraw);
-
-if("serviceWorker" in navigator){
-  navigator.serviceWorker.register("./service-worker.js").catch(()=>{});
-}
-
-window.addEventListener("beforeinstallprompt",e=>{
-  e.preventDefault();deferredPrompt=e;$("installBtn").hidden=false;
-});
-$("installBtn").onclick=async()=>{
-  if(!deferredPrompt)return;
-  deferredPrompt.prompt();
-  await deferredPrompt.userChoice;
-  deferredPrompt=null;$("installBtn").hidden=true;
-};
+function redraw(){resize(cfC);resize(cpC);draw(cfX,cfC,cantus,1,"whole",false);draw(cpX,cpC,counter,mode==="1:2"?2:1,mode==="1:2"?"half":"whole",true);$("selectedPitch").textContent=selected==null?"未選択":counter[selected].rest?"休符":noteName(counter[selected].step)}
+function point(e,c){let r=c.getBoundingClientRect();return{x:e.clientX-r.left,y:e.clientY-r.top}}
+cpC.addEventListener("pointerdown",e=>{drag=true;let p=point(e,cpC);selected=idx(p.x,counter.length,cpC.clientWidth);counter[selected].step=stepFromY(p.y);counter[selected].rest=false;redraw();e.preventDefault()});
+cpC.addEventListener("pointermove",e=>{if(!drag||selected==null)return;let p=point(e,cpC);counter[selected].step=stepFromY(p.y);redraw();e.preventDefault()});
+cpC.addEventListener("pointerup",()=>drag=false);cpC.addEventListener("pointercancel",()=>drag=false);
+$("upBtn").onclick=()=>{if(selected==null)return;counter[selected].step++;redraw()};$("downBtn").onclick=()=>{if(selected==null)return;counter[selected].step--;redraw()};$("restBtn").onclick=()=>{if(selected==null)return;counter[selected].rest=true;redraw()};
+function setMode(m){mode=m;selected=null;resetCounter();$("mode12Btn").classList.toggle("active",m==="1:2");$("mode11Btn").classList.toggle("active",m==="1:1");$("modeHelp").textContent=m==="1:2"?"定旋律は全音符、対旋律は二分音符で入力します。":"定旋律・対旋律とも全音符で、1対1として入力します。";redraw()}
+$("mode12Btn").onclick=()=>setMode("1:2");$("mode11Btn").onclick=()=>setMode("1:1");
+$("resetBtn").onclick=()=>{resetCounter();selected=null;redraw()};$("clearBtn").onclick=()=>{counter.forEach(n=>n.rest=true);selected=null;redraw()};
+function analyze(){let out=[];if(mode==="1:1"){for(let i=0;i<cantus.length;i++){if(counter[i].rest)continue;let s=Math.abs(midi(counter[i].step)-midi(cantus[i].step))%12;let ok=[0,3,4,7,8,9].includes(s);out.push({sev:ok?"good":"error",title:"和声音程",loc:`第${i+1}小節`,msg:ok?"基本的な協和音程として扱えます。":"音程を確認してください。"})}}else{for(let m=0;m<cantus.length;m++){let cp=counter[m*2];if(cp.rest)continue;let s=Math.abs(midi(cp.step)-midi(cantus[m].step))%12;let ok=[0,3,4,7,8,9].includes(s);out.push({sev:ok?"good":"error",title:"強拍の和声音程",loc:`第${m+1}小節・強拍`,msg:ok?"強拍の基本和声音程として扱えます。":"強拍の音程を確認してください。"})}}return out}
+$("analyzeBtn").onclick=()=>{let a=analyze(),r=$("results");r.innerHTML="";a.forEach(v=>{let d=document.createElement("div");d.className=`result ${v.sev}`;d.innerHTML=`<b>${v.title}</b><div class="muted">${v.loc}</div><div>${v.msg}</div>`;r.appendChild(d)});$("summaryBadge").textContent=`${a.length}件`};
+window.addEventListener("load",redraw);window.addEventListener("resize",redraw);if("serviceWorker"in navigator)navigator.serviceWorker.register("./service-worker.js");

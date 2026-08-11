@@ -1,12 +1,1 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="192" height="192" viewBox="0 0 512 512">
-<rect width="512" height="512" rx="112" fill="#111"/>
-<g stroke="#fff" stroke-width="14">
-<line x1="92" y1="162" x2="420" y2="162"/><line x1="92" y1="206" x2="420" y2="206"/>
-<line x1="92" y1="250" x2="420" y2="250"/><line x1="92" y1="294" x2="420" y2="294"/>
-<line x1="92" y1="338" x2="420" y2="338"/>
-</g>
-<ellipse cx="220" cy="294" rx="34" ry="24" fill="#fff" transform="rotate(-18 220 294)"/>
-<rect x="246" y="175" width="12" height="120" fill="#fff"/>
-<ellipse cx="334" cy="206" rx="34" ry="24" fill="#fff" transform="rotate(-18 334 206)"/>
-<rect x="360" y="88" width="12" height="120" fill="#fff"/>
-</svg>
+<svg xmlns="http://www.w3.org/2000/svg" width="192" height="192" viewBox="0 0 512 512"><rect width="512" height="512" rx="112" fill="#111"/><text x="256" y="330" text-anchor="middle" font-size="280" fill="white">𝄞</text></svg>
