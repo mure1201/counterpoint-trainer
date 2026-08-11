@@ -1,5 +1,5 @@
 
-const APP_VERSION="1.9.0";
+const APP_VERSION="1.10.0";
 const $=id=>document.getElementById(id);
 
 const cfC=$("cantusCanvas"), cpC=$("counterCanvas");
@@ -116,39 +116,39 @@ function drawClef(ctx,staffTop=TOP,staffLeft=STAFF_LEFT){
 function openHead(ctx,px,py,kind){
   ctx.save();
   ctx.translate(px,py);
-  ctx.rotate(-0.30);
 
-  // v1.9:
-  // 外周は固定したまま、白抜き部分を少し偏心させて
-  // 「内側だけ」厚みが変わる伝統的な音符頭へ。
-  // 太い部分と細い部分は楕円同士の連続曲線なので滑らかにつながる。
-  const rx = kind==="whole" ? 10.3 : 10.0;
-  const ry = kind==="whole" ? 6.35 : 6.10;
+  // v1.10:
+  // 考え方を単純化し、黒い楕円の中を白い楕円で抜く。
+  // 外側の黒楕円は一定。違いは白い楕円の傾きのみ。
+  //
+  // 全音符：白い楕円が左肩上がり（／）
+  // 二分音符：白い楕円が右肩上がり（＼）
 
-  // 外側の黒い輪郭
+  const outerRx = kind==="whole" ? 10.4 : 10.0;
+  const outerRy = kind==="whole" ? 6.35 : 6.05;
+  const outerAngle = -0.10; // 外形はほぼ水平に近く保つ
+
   ctx.fillStyle="#111";
   ctx.beginPath();
-  ctx.ellipse(0,0,rx,ry,0,0,Math.PI*2);
+  ctx.ellipse(0,0,outerRx,outerRy,outerAngle,0,Math.PI*2);
   ctx.fill();
 
-  // 白抜き。
-  // 全音符：右上・左下が太くなるよう左上寄りへ。
-  // 二分音符：左上・右下が太くなるよう右下寄りへ。
-  const dx = kind==="whole" ? -1.35 : 1.25;
-  const dy = kind==="whole" ? -0.80 : 0.78;
-  const holeRx = kind==="whole" ? 6.80 : 6.55;
-  const holeRy = kind==="whole" ? 3.72 : 3.58;
+  // 白抜きの楕円を明確に傾ける。
+  // Canvasでは正の角度が時計回り方向。
+  const holeAngle = kind==="whole" ? -0.48 : 0.48;
+  const holeRx = kind==="whole" ? 6.75 : 6.45;
+  const holeRy = kind==="whole" ? 3.45 : 3.35;
 
   ctx.fillStyle="#fff";
   ctx.beginPath();
-  ctx.ellipse(dx,dy,holeRx,holeRy,0,0,Math.PI*2);
+  ctx.ellipse(0,0,holeRx,holeRy,holeAngle,0,Math.PI*2);
   ctx.fill();
 
-  // 外周だけごく細く締める
+  // 外周は細く締める
   ctx.strokeStyle="#111";
-  ctx.lineWidth=0.65;
+  ctx.lineWidth=0.7;
   ctx.beginPath();
-  ctx.ellipse(0,0,rx,ry,0,0,Math.PI*2);
+  ctx.ellipse(0,0,outerRx,outerRy,outerAngle,0,Math.PI*2);
   ctx.stroke();
 
   ctx.restore();
@@ -156,12 +156,29 @@ function openHead(ctx,px,py,kind){
 function drawWhole(ctx,px,py){openHead(ctx,px,py,"whole")}
 function drawHalf(ctx,px,py,step){
   openHead(ctx,px,py,"half");
+
   const stemDown=step>=6; // 中央線以上は下向き
-  const stemLength=LINE*3; // v1.4: 五線の3段分
-  ctx.save();ctx.strokeStyle="#111";ctx.lineWidth=1.7;ctx.beginPath();
-  if(stemDown){ctx.moveTo(px-7.7,py);ctx.lineTo(px-7.7,py+stemLength)}
-  else{ctx.moveTo(px+7.7,py);ctx.lineTo(px+7.7,py-stemLength)}
-  ctx.stroke();ctx.restore();
+  const stemLength=LINE*3; // 五線の3段分
+
+  // v1.10: 棒を音符頭から少し外側へ。
+  // 上向きは右外側、下向きは左外側。
+  const stemXOffset=8.9;
+
+  ctx.save();
+  ctx.strokeStyle="#111";
+  ctx.lineWidth=1.7;
+  ctx.beginPath();
+
+  if(stemDown){
+    ctx.moveTo(px-stemXOffset,py+0.4);
+    ctx.lineTo(px-stemXOffset,py+stemLength);
+  }else{
+    ctx.moveTo(px+stemXOffset,py-0.4);
+    ctx.lineTo(px+stemXOffset,py-stemLength);
+  }
+
+  ctx.stroke();
+  ctx.restore();
 }
 function drawHalfRest(ctx,px){
   const line3=TOP+LINE*2;
